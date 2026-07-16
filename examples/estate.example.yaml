@@ -1,0 +1,138 @@
+# ─────────────────────────────────────────────────────────────
+# Digital Estate Register — EXAMPLE (safe dummy data)
+#
+# Copy this file to estate.yaml at the repo root, replace every
+# entry with your own, then run:  scripts/validate.sh
+#
+# estate.yaml is git-ignored. This example is the only register
+# that may ever be committed. Notice what is NOT here: no
+# passwords, no full account numbers, no seed phrases. Pointers
+# only — the executor gets credentials from the password manager.
+# ─────────────────────────────────────────────────────────────
+
+meta:
+  owner: Alex Example
+  updated: 2026-07-16
+  jurisdiction_primary: US-NY
+  jurisdiction_secondary: UK
+  password_manager: >
+    1Password family account. Executor access via the printed Emergency Kit
+    held in the fireproof box at [home], and via family-organiser recovery
+    (Jo Example is a family organiser).
+  notes: >
+    This file lists assets and intended actions. It holds no passwords.
+    Credentials for everything below live in the password manager above.
+    Work through crypto entries FIRST — they are unrecoverable if mishandled.
+
+assets:
+  - id: A001
+    provider: HSBC UK
+    type: cash
+    identifier: "current a/c …1234"
+    jurisdiction: UK
+    approx_value: "£8,000"
+    action: liquidate
+    action_notes: >
+      Sole account. Notify via HSBC bereavement services, transfer the
+      balance to the estate account, then close.
+    access_pointer: "1Password > HSBC"
+
+  - id: A002
+    provider: Vanguard
+    type: holding
+    identifier: "brokerage …9876"
+    jurisdiction: US
+    approx_value: "$40,000 (index funds)"
+    action: transfer
+    action_notes: >
+      Transfer-on-death beneficiary already set to Jo Example — confirm with
+      Vanguard's estate team; should pass outside probate.
+    access_pointer: "1Password > Vanguard"
+
+  - id: A003
+    provider: Adobe Creative Cloud
+    type: subscription
+    identifier: "billed to Amex …5678"
+    jurisdiction: US
+    approx_value: "liability ~$60/mo"
+    action: cancel
+    action_notes: "Recurring charge. Cancel promptly to stop billing the estate."
+    access_pointer: "1Password > Adobe"
+
+  - id: A004
+    provider: Ledger hardware wallet
+    type: crypto
+    identifier: "wallet label: cold-storage-main"
+    jurisdiction: US
+    approx_value: "$15,000 (BTC + ETH)"
+    action: transfer
+    action_notes: >
+      HIGH PRIORITY — unrecoverable without the seed. Do not type the seed
+      into any website or app someone sends you. The device is in the
+      fireproof box at [home]; the seed phrase backup is in the bank
+      deposit box (see A006). Get a technically competent, trusted helper
+      before moving anything.
+    access_pointer: "Device PIN and instructions: 1Password > Ledger"
+
+  - id: A005
+    provider: widgets-example.com (side business)
+    type: online-business
+    identifier: "Stripe account + domain at Namecheap"
+    jurisdiction: US
+    approx_value: "~$300/mo net revenue"
+    action: transfer
+    action_notes: >
+      Small SaaS. Offer first to co-builder Sam Example (contact in
+      1Password note); if declined within 3 months, cancel the hosting and
+      let the domain lapse. Customers must get 30 days' notice by email.
+    access_pointer: "1Password > Widgets vault (Stripe, Namecheap, Railway)"
+
+  - id: A006
+    provider: First Republic safe deposit box
+    type: other
+    identifier: "box …22, Main St branch"
+    jurisdiction: US
+    approx_value: "contents: documents + seed backup"
+    action: notify-only
+    action_notes: >
+      Executor access requires the death certificate and letters
+      testamentary. Contains the seed phrase backup for A004 — retrieve
+      before doing anything with crypto.
+    access_pointer: "Key taped inside the fireproof box lid at [home]"
+
+  - id: A007
+    provider: American Express
+    type: liability
+    identifier: "card …5678"
+    jurisdiction: US
+    approx_value: "liability, ~$1,200 revolving"
+    action: notify-only
+    action_notes: >
+      Notify Amex estate services; stop the card, settle the balance from
+      the estate. Subscriptions billed to it are listed separately here.
+    access_pointer: "1Password > Amex"
+
+  - id: A008
+    provider: WordPress blog (alexwrites.example.com)
+    type: other
+    identifier: "self-hosted on shared hosting …0042"
+    jurisdiction: US
+    approx_value: "sentimental only, hosting $8/mo"
+    action: delete
+    action_notes: >
+      Download a full backup for the family archive first, then cancel
+      hosting and delete the site. Nothing here has commercial value.
+    access_pointer: "1Password > Bluehost"
+
+platform_legacy_tools:
+  - platform: Apple
+    tool: Legacy Contact
+    configured: true
+    contact: Jo Example
+  - platform: Google
+    tool: Inactive Account Manager
+    configured: true
+    contact: Jo Example (3-month inactivity trigger)
+  - platform: Meta
+    tool: Legacy Contact
+    configured: false      # to do — set in Facebook memorialization settings

@@ -1,0 +1,146 @@
+# ─────────────────────────────────────────────────────────────
+# Digital Estate Register — schema definition (v1)
+#
+# This file is both the human-readable field reference and the
+# machine-readable rule set: scripts/validate.sh loads it directly,
+# so the documentation and the validator cannot drift apart.
+#
+# Golden rules, enforced by the validator where a machine can:
+#   1. No secrets. Ever. No passwords, no full account numbers,
+#      no seed phrases, no PINs. Pointers only.
+#   2. `type` and `action` are the load-bearing fields: `action`
+#      tells the executor what you want done; everything else
+#      exists to help them find the asset.
+#   3. `identifier` is a last-4 or a reference — enough for the
+#      executor to name the asset to a provider, never enough for
+#      anyone to use it.
+# ─────────────────────────────────────────────────────────────
+
+version: 1
+
+sections:
+
+  meta:
+    required: true
+    kind: map
+    doc: Who this register belongs to and where credentials actually live.
+    fields:
+      owner:
+        required: true
+        type: string
+        doc: Full legal name of the register's owner.
+      updated:
+        required: true
+        type: date
+        doc: >
+          Date of last review (YYYY-MM-DD). A stale register misleads the
+          executor — update it at every will review, at minimum.
+      jurisdiction_primary:
+        required: true
+        type: string
+        doc: Primary legal jurisdiction, e.g. "US-NY" or "UK".
+      jurisdiction_secondary:
+        required: false
+        type: string
+        doc: Secondary jurisdiction, if assets span two legal systems.
+      password_manager:
+        required: true
+        type: string
+        doc: >
+          Which password manager holds the actual credentials and how the
+          executor gets emergency access to it (e.g. "1Password. Executor
+          access via its Emergency Kit, held by [name]."). This is a
+          pointer, never a secret.
+      notes:
+        required: false
+        type: string
+        doc: Free-text context for the executor.
+
+  assets:
+    required: true
+    kind: list
+    min_items: 1
+    doc: One entry per account, asset, or liability. If it would surprise or cost the estate, it belongs here.
+    item_fields:
+      id:
+        required: true
+        type: string
+        pattern: "^A[0-9]{3,}$"
+        unique: true
+        doc: Stable unique reference — A001, A002, … Never reuse an ID.
+      provider:
+        required: true
+        type: string
+        doc: Institution or service name as the executor would search for it.
+      type:
+        required: true
+        type: enum
+        values: [cash, liability, subscription, holding, crypto, online-business, other]
+        doc: >
+          What kind of thing this is. "crypto" entries are treated as high
+          priority — a missed wallet is unrecoverable, not merely delayed.
+      identifier:
+        required: true
+        type: string
+        doc: >
+          Last-4 digits or a reference ONLY — "current a/c …1234". Never a
+          full account number, never a credential. The validator rejects
+          long digit runs.
+      jurisdiction:
+        required: false
+        type: string
+        doc: Where this asset legally sits, if different from meta.
+      approx_value:
+        required: false
+        type: string
+        doc: >
+          Rough value or cost, as text ("£12k", "liability ~$60/mo"). Helps
+          the executor triage; precision is not the point.
+      action:
+        required: true
+        type: enum
+        values: [liquidate, cancel, transfer, delete, notify-only]
+        doc: >
+          What you want done. liquidate = sell/withdraw into the estate;
+          cancel = stop the service/charge; transfer = pass to a named
+          person; delete = close and erase; notify-only = inform the
+          provider, no other action expected.
+      action_notes:
+        required: true
+        type: string
+        doc: >
+          The action in your own words — the executor acts on this. Name
+          names, state the destination, flag anything time-critical.
+      access_pointer:
+        required: false
+        recommended: true
+        type: string
+        doc: >
+          Where the login lives (e.g. "1Password > HSBC") or where a
+          physical key is kept. A signpost, not a secret.
+
+  platform_legacy_tools:
+    required: false
+    kind: list
+    doc: >
+      Platform-native legacy settings (Apple Legacy Contact, Google
+      Inactive Account Manager, Meta Legacy Contact). Recorded here because
+      under RUFADAA-style law these designations legally outrank the will —
+      the executor must know they exist and who was named.
+    item_fields:
+      platform:
+        required: true
+        type: string
+        doc: Apple, Google, Meta, …
+      tool:
+        required: true
+        type: string
+        doc: The platform's name for it, e.g. "Legacy Contact".
+      configured:
+        required: true
+        type: bool
+        doc: Set true only once actually configured on the platform.
+      contact:
+        required: false
+        type: string
+        doc: Who was designated, so the executor knows whom to coordinate with.

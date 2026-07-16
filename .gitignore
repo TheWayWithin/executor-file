@@ -1,0 +1,23 @@
+# ─────────────────────────────────────────────────────────────
+# REAL ESTATE DATA — MUST NEVER BE COMMITTED
+#
+# The only files that belong in this repo are the schema, the
+# example (dummy data), the templates, and the scripts. Your
+# real register is private and lives outside version control.
+# ─────────────────────────────────────────────────────────────
+
+# The live register (plaintext), wherever it sits in the tree
+estate.yaml
+estate.yml
+
+# Any encrypted register. The .age file should live outside the
+# repo anyway; this is belt-and-braces in case one is created here.
+*.age
+
+# Passphrase shares must never be written to disk at all — but if
+# someone redirects ssss output to a file, don't let git pick it up.
+*share*.txt
+*.shares
+
+# OS noise
+.DS_Store
