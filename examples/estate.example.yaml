@@ -245,6 +245,12 @@ documents:
     location: "Fireproof box at [home], green folder"
   - name: House deeds
     location: "Example & Co LLP, deeds storage"
+  - name: Executor File copy (USB)
+    location: "USB stick in the fireproof box at [home]"
+    note: estate.yaml.age with its .sha256 sidecar.
+  - name: Executor File copy (cloud)
+    location: "Private cloud drive > Estate folder"
+    note: Refresh after every review (scripts/verify-copies.sh checks).
 
 platform_legacy_tools:
   - platform: Apple

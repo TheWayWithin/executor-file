@@ -22,5 +22,14 @@ estate.yml
 *share*.txt
 *.shares
 
+# Derived from the private register (render.sh / make-guide.sh /
+# review.sh / test-recovery.sh outputs) — as private as the register.
+executor-report.md
+executor-report.html
+EXECUTOR-INSTRUCTIONS-filled.md
+EXECUTOR-INSTRUCTIONS-filled.html
+executor-file-reminders.ics
+recovery-tests.log
+
 # OS noise
 .DS_Store
