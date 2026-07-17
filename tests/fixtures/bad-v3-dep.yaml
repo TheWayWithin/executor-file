@@ -1,0 +1,24 @@
+# Format 3: depends_on pointing at a record that does not exist.
+# A dangling dependency would send the executor hunting for a phantom
+# asset. Both tiers must FAIL this.
+meta:
+  format_version: 3
+  owner: Dangling Dep
+  updated: 2026-07-17
+  jurisdictions: [UK]
+  password_manager: "Bitwarden"
+
+assets:
+  - id: A001
+    provider: Cold wallet
+    type: crypto
+    identifier: "wallet: main"
+    priority: critical
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-01
+    preferred_action: transfer
+    beneficiary: Jo
+    depends_on: [A999]
+    action_notes: Seed backup is in a box that this register forgot to list.
+    access_pointer: "1Password > Ledger"

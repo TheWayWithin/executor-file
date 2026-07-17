@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# Executor File — EXAMPLE register (safe dummy data)
+# Executor File — EXAMPLE register (safe dummy data, format 3)
 #
 # Copy this file to estate.yaml at the repo root, replace every
 # entry with your own, then run:  scripts/validate.sh
@@ -13,14 +13,18 @@
 # practical guidance, subject to the will, beneficiary
 # designations, ownership rights, provider terms, and applicable
 # law.
+#
+# first_step is what the executor does NOW (usually: secure,
+# don't dispose); preferred_action is the eventual disposition.
+# depends_on orders the work: [A006] means "deal with A006 first".
 # ─────────────────────────────────────────────────────────────
 
 meta:
-  format_version: 2
+  format_version: 3
   owner: Alex Example
-  updated: 2026-07-16
-  jurisdiction_primary: US-NY
-  jurisdiction_secondary: UK
+  updated: 2026-07-17
+  jurisdictions: [US-NY, UK]
+  domicile: US-NY
   password_manager: >
     1Password family account. Executor access via the printed Emergency Kit
     held in the fireproof box at [home], and via family-organiser recovery
@@ -28,8 +32,9 @@ meta:
   notes: >
     This file lists assets and intended actions. It holds no passwords.
     Credentials for everything below live in the password manager above.
-    Work through critical-priority entries FIRST — crypto is unrecoverable
-    if mishandled.
+    Preserve before you dispose: secure devices, recovery material, and
+    anything a business depends on FIRST; understand your legal authority
+    before moving anything.
 
 assets:
   - id: A001
@@ -39,7 +44,7 @@ assets:
     priority: high
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: UK
     approx_value: "£8,000"
     preferred_action: liquidate
@@ -55,10 +60,14 @@ assets:
     priority: normal
     ownership: beneficiary-designated
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "$40,000 (index funds)"
     preferred_action: transfer
+    beneficiary: Jo Example
+    first_step: >
+      Nothing urgent — transfer-on-death designation should pass outside
+      probate. Confirm with Vanguard's estate team before touching it.
     action_notes: >
       Transfer-on-death beneficiary already set to Jo Example — confirm with
       Vanguard's estate team; should pass outside probate.
@@ -71,9 +80,10 @@ assets:
     priority: high
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "liability ~$60/mo"
+    billing_cycle: monthly
     preferred_action: cancel
     action_notes: "Recurring charge. Cancel promptly to stop billing the estate."
     access_pointer: "1Password > Adobe"
@@ -85,15 +95,20 @@ assets:
     priority: critical
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "$15,000 (BTC + ETH)"
     preferred_action: transfer
+    beneficiary: Jo Example
+    first_step: >
+      Secure the device and the seed backup — do NOT move funds yet, and
+      never type recovery words into any website or app.
+    depends_on: [A006]
     action_notes: >
-      Unrecoverable without the seed. Do not type the seed into any website
-      or app someone sends you. The device is in the fireproof box at
-      [home]; the seed phrase backup is in the bank deposit box (see A006).
-      Get a technically competent, trusted helper before moving anything.
+      Unrecoverable without the seed. The device is in the fireproof box at
+      [home]; the seed phrase backup is in the bank deposit box (A006) —
+      retrieve that first. Get a technically competent, trusted helper
+      before moving anything.
     access_pointer: "Device PIN and instructions: 1Password > Ledger"
 
   - id: A005
@@ -103,10 +118,15 @@ assets:
     priority: high
     ownership: business-owned
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "~$300/mo net revenue"
     preferred_action: transfer
+    beneficiary: Sam Example (co-builder)
+    first_step: >
+      Keep the domain, hosting, and Stripe account RUNNING — a lapsed
+      domain or hosting bill destroys the value in days. Cancel nothing here
+      until the handover is decided.
     action_notes: >
       Small SaaS. Offer first to co-builder Sam Example (contact in
       1Password note); if declined within 3 months, cancel the hosting and
@@ -120,10 +140,13 @@ assets:
     priority: critical
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "contents: documents + seed backup"
     preferred_action: notify-only
+    first_step: >
+      Start the bank's access process early — it needs the death
+      certificate and letters testamentary, which take time to obtain.
     action_notes: >
       Executor access requires the death certificate and letters
       testamentary. Contains the seed phrase backup for A004 — retrieve
@@ -137,13 +160,15 @@ assets:
     priority: high
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: 2026-07-17
     jurisdiction: US
     approx_value: "liability, ~$1,200 revolving"
-    preferred_action: notify-only
+    billing_cycle: monthly
+    preferred_action: settle
     action_notes: >
       Notify Amex estate services; stop the card, settle the balance from
-      the estate. Subscriptions billed to it are listed separately here.
+      the estate. Subscriptions billed to it are listed separately here —
+      cancel those first or they follow the balance.
     access_pointer: "1Password > Amex"
 
   - id: A008
@@ -153,14 +178,73 @@ assets:
     priority: low
     ownership: sole
     status: active
-    last_confirmed: 2026-07-16
+    last_confirmed: unknown
     jurisdiction: US
     approx_value: "sentimental only, hosting $8/mo"
+    billing_cycle: monthly
     preferred_action: delete
+    first_step: >
+      Download a full backup for the family archive BEFORE cancelling
+      anything.
     action_notes: >
       Download a full backup for the family archive first, then cancel
       hosting and delete the site. Nothing here has commercial value.
     access_pointer: "1Password > Bluehost"
+
+  - id: A009
+    provider: Apple iCloud photo library
+    type: other
+    identifier: "Apple ID alex@example.com"
+    priority: normal
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-17
+    jurisdiction: US
+    approx_value: "sentimental — 20 years of family photos"
+    preferred_action: preserve
+    first_step: >
+      Nothing time-critical, but do not let the Apple account close before
+      the photos are exported.
+    action_notes: >
+      Keep the library intact for the family. Jo Example is Apple Legacy
+      Contact (see platform_legacy_tools) — use that route to export
+      everything to a family drive before the account is closed.
+    access_pointer: "1Password > Apple"
+
+contacts:
+  - role: solicitor
+    name: Priya Solicitor, Example & Co LLP
+    pointer: "office +1 555 0100; firm address in 1Password > Solicitor"
+    note: Holds the original will and a sealed copy of share 3.
+  - role: accountant
+    name: Chris Accountant
+    pointer: "chris@example-accounts.com"
+    note: Prepares the annual returns; knows the business finances.
+  - role: technical helper
+    name: Sam Example
+    pointer: "contact card in 1Password > Widgets vault"
+    note: Trusted for anything technical — crypto, servers, the business.
+  - role: share-holder
+    name: Jo Example (spouse)
+    pointer: "[phone]"
+    note: Holds printed share 1.
+  - role: share-holder
+    name: Pat Example (sibling)
+    pointer: "[phone]"
+    note: Holds printed share 2.
+  - role: share-holder
+    name: Priya Solicitor
+    pointer: "office +1 555 0100"
+    note: Holds printed share 3 (sealed, in the deeds packet).
+
+documents:
+  - name: Will (original)
+    location: "Example & Co LLP, deeds storage"
+    note: Priya Solicitor holds it; executor named there.
+  - name: Life insurance schedule
+    location: "Fireproof box at [home], green folder"
+  - name: House deeds
+    location: "Example & Co LLP, deeds storage"
 
 platform_legacy_tools:
   - platform: Apple

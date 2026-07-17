@@ -1,20 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://executorfile.com/schema/estate.schema.json",
-  "title": "Executor File register (format 2)",
-  "description": "An encrypted, self-hosted register of every account, asset, and liability a person owns, with what they want done about each one. Holds pointers only — never credentials, full account numbers, or seed material. Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.",
+  "title": "Executor File register (format 3)",
+  "description": "An encrypted, self-hosted register of every account, asset, and liability a person owns, with what they want done about each one. Holds pointers only — never credentials, full account numbers, or seed material. Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law. This file is the single source of truth for the schema; schema/estate.schema.yaml is its annotated documentation, and a CI drift test keeps the two in agreement.",
   "type": "object",
   "required": ["meta", "assets"],
   "additionalProperties": false,
   "properties": {
     "meta": {
       "type": "object",
-      "required": ["format_version", "owner", "updated", "jurisdiction_primary", "password_manager"],
+      "required": ["format_version", "owner", "updated", "jurisdictions", "password_manager"],
       "additionalProperties": false,
       "properties": {
         "format_version": {
-          "description": "Schema format of this file. Must be 2.",
-          "const": 2
+          "description": "Schema format of this file. Must be 3. (Format 2 registers still validate with the repo validators for one version, with a migrate warning.)",
+          "const": 3
         },
         "owner": {
           "description": "Full legal name of the register's owner.",
@@ -27,13 +27,18 @@
           "format": "date",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         },
-        "jurisdiction_primary": {
-          "description": "Primary legal jurisdiction, e.g. \"US-NY\" or \"UK\".",
-          "type": "string",
-          "minLength": 1
+        "jurisdictions": {
+          "description": "Every legal system the estate touches, e.g. [\"US-NY\", \"UK\"]. Replaces format 2's primary/secondary pair, which could not model NY + UK + an online business incorporated elsewhere.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
         },
-        "jurisdiction_secondary": {
-          "description": "Secondary jurisdiction, if assets span two legal systems.",
+        "domicile": {
+          "description": "Jurisdiction of legal domicile, if worth stating separately — it usually decides which law governs the estate.",
+          "type": "string"
+        },
+        "residence": {
+          "description": "Jurisdiction of tax residence at last review, if different from domicile.",
           "type": "string"
         },
         "password_manager": {
@@ -54,6 +59,17 @@
         "type": "object",
         "required": ["id", "provider", "type", "identifier", "priority", "ownership", "status", "preferred_action", "action_notes"],
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": { "status": { "const": "active" } },
+              "required": ["status"]
+            },
+            "then": {
+              "required": ["last_confirmed"]
+            }
+          }
+        ],
         "properties": {
           "id": {
             "description": "Stable unique reference — A001, A002, … Never reuse an ID.",
@@ -83,14 +99,15 @@
             "enum": ["sole", "joint", "beneficiary-designated", "trust", "business-owned", "unknown"]
           },
           "status": {
-            "description": "Default guidance is active. Mark closed accounts closed instead of deleting the entry.",
+            "description": "Default guidance is active. Mark closed accounts closed instead of deleting the entry. Active entries must carry last_confirmed (the literal value unknown is allowed, and is itself a signal).",
             "enum": ["active", "closed"]
           },
           "last_confirmed": {
-            "description": "When this entry was last confirmed accurate (YYYY-MM-DD).",
-            "type": "string",
-            "format": "date",
-            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+            "description": "When this entry was last confirmed accurate (YYYY-MM-DD), or the literal string \"unknown\" as an honest signal. Required whenever status is active — a missing freshness signal is a defect, not a default.",
+            "oneOf": [
+              { "type": "string", "format": "date", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              { "const": "unknown" }
+            ]
           },
           "jurisdiction": {
             "description": "Where this asset legally sits, if different from meta.",
@@ -101,8 +118,25 @@
             "type": "string"
           },
           "preferred_action": {
-            "description": "What you want done. Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.",
-            "enum": ["liquidate", "cancel", "transfer", "delete", "notify-only"]
+            "description": "What you want done. settle = pay off a debt from the estate; preserve = keep it alive and intact (data, creative work, a running business). Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.",
+            "enum": ["liquidate", "cancel", "transfer", "delete", "notify-only", "settle", "preserve"]
+          },
+          "first_step": {
+            "description": "What the executor should do NOW, decoupled from the eventual disposition — e.g. \"Secure the device and recovery material. Do not transfer yet.\" One honest sentence beats modelling probate law.",
+            "type": "string"
+          },
+          "depends_on": {
+            "description": "Record IDs that must be dealt with before this one — e.g. the safe deposit box holding this wallet's seed. Renderers order work with it.",
+            "type": "array",
+            "items": { "type": "string", "pattern": "^A[0-9]{3,}$" }
+          },
+          "beneficiary": {
+            "description": "Who receives this asset when preferred_action is transfer. A name the executor can act on, out of the prose and into a sortable field.",
+            "type": "string"
+          },
+          "billing_cycle": {
+            "description": "For liabilities and subscriptions: how often it bills, so the renderer can sort by burn rate.",
+            "enum": ["monthly", "annual", "one-off"]
           },
           "action_notes": {
             "description": "The preferred action in your own words — the executor acts on this.",
@@ -111,6 +145,60 @@
           },
           "access_pointer": {
             "description": "Where the login lives or where a physical key is kept. A signpost, not a secret.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "contacts": {
+      "description": "People the executor will need: solicitor, accountant, adviser, business partner, technically trusted helper. Pointers, not sensitive contents.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["role", "name"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "description": "What this person is to the estate — solicitor, accountant, share-holder, technical helper, …",
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "description": "Who they are.",
+            "type": "string",
+            "minLength": 1
+          },
+          "pointer": {
+            "description": "How to reach them or where their details live. Phone numbers are fine here (the no-secrets scan allows them in contacts); account numbers and credentials are not.",
+            "type": "string"
+          },
+          "note": {
+            "description": "Why they matter, e.g. \"holds the original will\".",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "documents": {
+      "description": "Where the paper lives: will, deeds, insurance schedules, statements. Discovery, not probate automation.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "location"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "What the document is — \"Will (original)\", \"House deeds\", …",
+            "type": "string",
+            "minLength": 1
+          },
+          "location": {
+            "description": "Where it physically or digitally lives.",
+            "type": "string",
+            "minLength": 1
+          },
+          "note": {
+            "description": "Anything the executor should know about it.",
             "type": "string"
           }
         }

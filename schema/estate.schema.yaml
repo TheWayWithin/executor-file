@@ -1,16 +1,17 @@
 # ─────────────────────────────────────────────────────────────
-# Executor File — schema definition (format 2)
+# Executor File — annotated schema reference (format 3)
 #
-# This file is both the human-readable field reference and the
-# machine-readable rule set: scripts/validate.py loads it directly,
-# so the documentation and the strict validator cannot drift apart.
-# The zero-dependency baseline validator (scripts/validate.sh)
-# encodes the same rules in POSIX sh + awk; a fixture test in CI
-# asserts the two tiers agree. The formal contract for external
-# tools is schema/estate.schema.json (JSON Schema draft 2020-12).
+# The single source of truth for the schema is
+# schema/estate.schema.json (JSON Schema 2020-12) — any standard
+# tool can validate a register against it without our scripts.
+# THIS file is the human-readable, annotated companion; the strict
+# validator (scripts/validate.py) loads it for its rule set, and a
+# CI drift test (tests/schema-agreement.py) fails the build if the
+# two files ever disagree on fields, enums, or requiredness — no
+# hand-maintained duplicates.
 #
 # Golden rules, enforced by the validators where a machine can:
-#   1. No secrets. Ever. No passwords, no full account numbers,
+#   1. No credentials. Ever. No passwords, no full account numbers,
 #      no seed phrases, no PINs. Pointers only.
 #   2. `type` and `preferred_action` are the load-bearing fields:
 #      `preferred_action` tells the executor what you want done;
@@ -23,9 +24,21 @@
 # documented: preferred actions are practical guidance, subject to
 # the will, beneficiary designations, ownership rights, provider
 # terms, and applicable law.
+#
+# MIGRATING FROM FORMAT 2 (validators accept both for this one
+# version, and warn on 2):
+#   1. meta: change `format_version: 2` to `format_version: 3`.
+#   2. meta: replace `jurisdiction_primary:` / `jurisdiction_secondary:`
+#      with one line listing them all:  jurisdictions: [US-NY, UK]
+#   3. every asset with `status: active` must now carry
+#      `last_confirmed:` — a date, or the literal `unknown` if you
+#      honestly don't know (that is a signal, not a failure).
+#   Everything else is additive: first_step, depends_on, beneficiary,
+#   billing_cycle, the settle/preserve actions, and the contacts and
+#   documents sections are new, optional, and worth filling in.
 # ─────────────────────────────────────────────────────────────
 
-version: 2
+version: 3
 
 sections:
 
@@ -37,11 +50,11 @@ sections:
       format_version:
         required: true
         type: int
-        values_int: [2]
+        values_int: [3]
         doc: >
-          Schema format of this file. Must be 2. Registers without it are
+          Schema format of this file. Must be 3. Registers without it are
           treated as format 1 and get a migrate message, never a silent
-          misparse.
+          misparse; format 2 still validates this version, with a warning.
       owner:
         required: true
         type: string
@@ -53,14 +66,24 @@ sections:
           Date of last review (YYYY-MM-DD). A stale register misleads the
           executor — update it at every will review, at minimum.
           scripts/review.sh bumps this automatically.
-      jurisdiction_primary:
+      jurisdictions:
         required: true
-        type: string
-        doc: Primary legal jurisdiction, e.g. "US-NY" or "UK".
-      jurisdiction_secondary:
+        type: list_of_strings
+        doc: >
+          Every legal system the estate touches, e.g. [US-NY, UK].
+          Replaces format 2's primary/secondary pair, which could not
+          model NY + UK + an online business incorporated elsewhere.
+          (Baseline validator reads the inline [a, b] form.)
+      domicile:
         required: false
         type: string
-        doc: Secondary jurisdiction, if assets span two legal systems.
+        doc: >
+          Jurisdiction of legal domicile, if worth stating separately —
+          it usually decides which law governs the estate.
+      residence:
+        required: false
+        type: string
+        doc: Jurisdiction of tax residence at last review, if different.
       password_manager:
         required: true
         type: string
@@ -126,14 +149,18 @@ sections:
         values: [active, closed]
         doc: >
           Default guidance is "active". Mark closed accounts closed instead
-          of deleting the entry — a trail beats a vanishing.
+          of deleting the entry — a trail beats a vanishing. Active entries
+          must carry last_confirmed.
       last_confirmed:
         required: false
-        recommended: true
-        type: date
+        required_when_active: true
+        type: date_or_unknown
         doc: >
-          When you last confirmed this entry is still accurate (YYYY-MM-DD).
-          The strict validator warns when this is older than 18 months.
+          When you last confirmed this entry is still accurate
+          (YYYY-MM-DD), or the literal `unknown` as an honest signal.
+          REQUIRED whenever status is active — a missing freshness signal
+          is a defect the validator surfaces, not a default it fills in.
+          The strict validator warns when it is older than 18 months.
       jurisdiction:
         required: false
         type: string
@@ -147,15 +174,46 @@ sections:
       preferred_action:
         required: true
         type: enum
-        values: [liquidate, cancel, transfer, delete, notify-only]
+        values: [liquidate, cancel, transfer, delete, notify-only, settle, preserve]
         doc: >
           What you want done. liquidate = sell/withdraw into the estate;
           cancel = stop the service/charge; transfer = pass to a named
-          person; delete = close and erase; notify-only = inform the
-          provider, no other action expected. Renamed from "action" in
-          format 1 to say what it is: preferred actions are practical
-          guidance, subject to the will, beneficiary designations,
-          ownership rights, provider terms, and applicable law.
+          person (name them in `beneficiary`); delete = close and erase;
+          notify-only = inform the provider, no other action expected;
+          settle = pay off a debt from the estate; preserve = keep it
+          alive and intact (data, creative work, a running business).
+          Preferred actions are practical guidance, subject to the will,
+          beneficiary designations, ownership rights, provider terms, and
+          applicable law.
+      first_step:
+        required: false
+        type: string
+        doc: >
+          What the executor should do NOW, decoupled from the eventual
+          disposition — "Secure the device and recovery material. Do not
+          transfer yet." One honest sentence beats modelling probate law.
+      depends_on:
+        required: false
+        type: list_of_ids
+        doc: >
+          Record IDs that must be dealt with before this one, e.g.
+          [A006] when the safe deposit box holds this wallet's seed.
+          The renderer orders work with it; the validator checks the
+          IDs exist. (Baseline validator reads the inline [a, b] form.)
+      beneficiary:
+        required: false
+        type: string
+        doc: >
+          Who receives this asset when preferred_action is transfer — a
+          name the executor can act on, out of the prose and into a
+          sortable field.
+      billing_cycle:
+        required: false
+        type: enum
+        values: [monthly, annual, one-off]
+        doc: >
+          For liabilities and subscriptions: how often it bills, so the
+          renderer can sort by burn rate.
       action_notes:
         required: true
         type: string
@@ -170,6 +228,54 @@ sections:
         doc: >
           Where the login lives (e.g. "1Password > HSBC") or where a
           physical key is kept. A signpost, not a secret.
+
+  contacts:
+    required: false
+    kind: list
+    doc: >
+      People the executor will need: solicitor, accountant, adviser,
+      business partner, technically trusted helper, share holders.
+      Pointers, not sensitive contents.
+    item_fields:
+      role:
+        required: true
+        type: string
+        doc: What this person is to the estate — solicitor, accountant, share-holder, technical helper, …
+      name:
+        required: true
+        type: string
+        doc: Who they are.
+      pointer:
+        required: false
+        type: string
+        doc: >
+          How to reach them or where their details live. Phone numbers are
+          fine here (the no-secrets scan allows them in contacts); account
+          numbers and credentials are not.
+      note:
+        required: false
+        type: string
+        doc: Why they matter, e.g. "holds the original will".
+
+  documents:
+    required: false
+    kind: list
+    doc: >
+      Where the paper lives: will, deeds, insurance schedules,
+      statements. Discovery, not probate automation.
+    item_fields:
+      name:
+        required: true
+        type: string
+        doc: What the document is — "Will (original)", "House deeds", …
+      location:
+        required: true
+        type: string
+        doc: Where it physically or digitally lives.
+      note:
+        required: false
+        type: string
+        doc: Anything the executor should know about it.
 
   platform_legacy_tools:
     required: false

@@ -1,0 +1,21 @@
+# Format 3: an active asset with no last_confirmed. A missing freshness
+# signal is a defect the validator surfaces, not a default it fills in.
+# Both tiers must FAIL this.
+meta:
+  format_version: 3
+  owner: No Confirm
+  updated: 2026-07-17
+  jurisdictions: [UK]
+  password_manager: "Bitwarden"
+
+assets:
+  - id: A001
+    provider: Some Bank
+    type: cash
+    identifier: "a/c …1234"
+    priority: high
+    ownership: sole
+    status: active
+    preferred_action: liquidate
+    action_notes: Balance to the estate account.
+    access_pointer: "Bitwarden > Some Bank"

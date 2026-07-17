@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Strict-tier validator for an Executor File register (format 2).
+"""Strict-tier validator for an Executor File register (format 3;
+format 2 accepted for this one version, with a migrate warning).
 
 Driven by schema/estate.schema.yaml so documentation and validator cannot
-drift apart. Beyond the zero-dependency baseline (scripts/validate.sh),
-this tier adds: type checking of every field, per-entry staleness
-warnings (last_confirmed older than 18 months), coverage checks, and —
-if the optional `jsonschema` package is installed — validation against
-the formal contract in schema/estate.schema.json (JSON Schema 2020-12).
+drift apart (the formal single source of truth is estate.schema.json —
+CI keeps the two in agreement). Beyond the zero-dependency baseline
+(scripts/validate.sh), this tier adds: type checking of every field,
+per-entry staleness warnings (last_confirmed older than 18 months),
+depends_on reference checks, coverage checks, and — if the optional
+`jsonschema` package is installed — validation against the formal
+contract in schema/estate.schema.json (JSON Schema 2020-12).
 
 Both tiers agree on what is an ERROR vs a WARNING; a fixture test in CI
 asserts it. This tier needs python3 + PyYAML; the baseline needs nothing.
@@ -41,14 +44,26 @@ JSON_SCHEMA_PATH = REPO_ROOT / "schema" / "estate.schema.json"
 # Entries not re-confirmed for this long draw a staleness warning.
 STALE_MONTHS = 18
 
+MIGRATE_V2_STEPS = (
+    "to migrate: set format_version: 3; replace jurisdiction_primary/"
+    "jurisdiction_secondary with e.g. \"jurisdictions: [US-NY, UK]\"; give "
+    "every active asset a last_confirmed (a date, or the literal unknown)"
+)
+
 # A run of 9+ digits (ignoring single spaces/dashes between them) is
-# treated as a full account/card number — those must never be in the register.
+# treated as a full account/card number — those must never be in the
+# register. In the contacts section, where phone numbers are expected
+# content, the threshold rises to 16 digits (longer than any phone
+# number, still short enough to catch card PANs and IBANs).
 DIGIT_RUN = re.compile(r"(?:\d[ -]?){9,}")
+DIGIT_RUN_CONTACTS = re.compile(r"(?:\d[ -]?){16,}")
 # "password: xyz", "PIN = 1234", "seed phrase: word word …" — looks like an
 # actual credential written down, not a pointer to one.
 SECRET_HINT = re.compile(
     r"(?i)\b(password|passphrase|pin|private key|seed phrase|recovery phrase)\b\s*(is|=|:)\s*\S"
 )
+
+ID_PATTERN = re.compile(r"^A[0-9]{3,}$")
 
 errors: list[str] = []
 warnings: list[str] = []
@@ -83,13 +98,21 @@ def type_ok(value, expected: str) -> bool:
         return isinstance(value, int) and not isinstance(value, bool)
     if expected == "date":
         return as_date(value) is not None
+    if expected == "date_or_unknown":
+        return value == "unknown" or as_date(value) is not None
+    if expected == "list_of_strings":
+        return (isinstance(value, list) and len(value) > 0
+                and all(isinstance(v, str) and v.strip() != "" for v in value))
+    if expected == "list_of_ids":
+        return (isinstance(value, list)
+                and all(isinstance(v, str) and ID_PATTERN.fullmatch(v) for v in value))
     return True
 
 
-def scan_for_secrets(value, where: str) -> None:
+def scan_for_secrets(value, where: str, digit_run=DIGIT_RUN) -> None:
     """Recursively scan values for things that must not be in the register."""
     if isinstance(value, str):
-        if DIGIT_RUN.search(value):
+        if digit_run.search(value):
             err(where, "contains a long digit run — looks like a full account/card "
                        "number. Use last-4 or a reference only.")
         if SECRET_HINT.search(value):
@@ -98,10 +121,10 @@ def scan_for_secrets(value, where: str) -> None:
                         "pointers only — double-check this value.")
     elif isinstance(value, dict):
         for k, v in value.items():
-            scan_for_secrets(v, f"{where}.{k}")
+            scan_for_secrets(v, f"{where}.{k}", digit_run)
     elif isinstance(value, list):
         for i, v in enumerate(value):
-            scan_for_secrets(v, f"{where}[{i}]")
+            scan_for_secrets(v, f"{where}[{i}]", digit_run)
 
 
 def check_fields(data: dict, field_specs: dict, where: str) -> None:
@@ -115,7 +138,14 @@ def check_fields(data: dict, field_specs: dict, where: str) -> None:
         value = data[name]
         ftype = spec.get("type", "string")
         if not type_ok(value, ftype):
-            err(where, f"field '{name}' should be a {ftype}, got: {value!r}")
+            hint = ""
+            if ftype == "date_or_unknown":
+                hint = " (a YYYY-MM-DD date, or the literal unknown)"
+            elif ftype == "list_of_strings":
+                hint = " (a non-empty list, e.g. [US-NY, UK])"
+            elif ftype == "list_of_ids":
+                hint = " (a list of record IDs, e.g. [A006])"
+            err(where, f"field '{name}' should be a {ftype}{hint}, got: {value!r}")
             continue
         if ftype == "enum" and value not in spec.get("values", []):
             allowed = ", ".join(spec.get("values", []))
@@ -139,7 +169,7 @@ def check_fields(data: dict, field_specs: dict, where: str) -> None:
 
 
 def jsonschema_pass(doc, target: Path) -> None:
-    """Optional: validate against the formal JSON Schema contract."""
+    """Optional: validate against the formal JSON Schema contract (format 3)."""
     try:
         import jsonschema
     except ImportError:
@@ -178,18 +208,39 @@ def main() -> int:
 
     if not isinstance(doc, dict):
         sys.stderr.write(f"error: {target} must be a YAML mapping "
-                         "(meta / assets / platform_legacy_tools).\n")
+                         "(meta / assets / contacts / documents / "
+                         "platform_legacy_tools).\n")
         return 1
 
     # Format gate first: a format-1 register gets a migrate message,
-    # never a silent misparse or a wall of field errors.
+    # never a silent misparse or a wall of field errors. Format 2 is
+    # accepted for this one version and normalised in memory.
     meta = doc.get("meta")
-    if isinstance(meta, dict) and meta.get("format_version") is None:
+    fmt = meta.get("format_version") if isinstance(meta, dict) else None
+    if isinstance(meta, dict) and fmt is None:
         err("meta", "no format_version — this file is a format 1 register. "
-            "To migrate: add \"format_version: 2\" under meta, rename every "
-            "asset \"action:\" to \"preferred_action:\", and add \"priority:\", "
-            "\"ownership:\" and \"status:\" to each asset "
+            "To migrate: add \"format_version: 3\" under meta, rename every "
+            "asset \"action:\" to \"preferred_action:\", add \"priority:\", "
+            "\"ownership:\" and \"status:\" to each asset, replace the "
+            "jurisdiction fields with \"jurisdictions: [...]\", and give "
+            "active assets a last_confirmed "
             "(see examples/estate.example.yaml)")
+    v2_compat = fmt == 2
+    if v2_compat:
+        warn("meta", "format_version is 2 — still accepted this version, "
+             f"but {MIGRATE_V2_STEPS}")
+        # One rename: primary/secondary jurisdictions become the array.
+        meta = dict(meta)
+        juris = [j for j in (meta.pop("jurisdiction_primary", None),
+                             meta.pop("jurisdiction_secondary", None)) if j]
+        if juris:
+            meta["jurisdictions"] = juris
+        meta["format_version"] = 3
+        doc = dict(doc)
+        doc["meta"] = meta
+    elif isinstance(meta, dict) and fmt is not None and fmt not in (2, 3):
+        err("meta", f"format_version is \"{fmt}\" — this validator understands "
+            "formats 2 (deprecated) and 3")
 
     sections = schema["sections"]
 
@@ -234,15 +285,28 @@ def main() -> int:
         if sec_name not in sections:
             warn(sec_name, "unknown top-level section (typo? not part of the schema)")
 
-    scan_for_secrets(doc, target.name)
+    for sec_name, sec in doc.items():
+        run = DIGIT_RUN_CONTACTS if sec_name == "contacts" else DIGIT_RUN
+        scan_for_secrets(sec, f"{target.name}.{sec_name}", run)
 
-    # Coverage and staleness (strict tier only).
+    # Cross-record checks, staleness, and coverage (strict tier only).
+    assets = doc.get("assets") if isinstance(doc.get("assets"), list) else []
+    all_ids = {a.get("id") for a in assets if isinstance(a, dict)}
     today = datetime.date.today()
     stale_before = today - datetime.timedelta(days=STALE_MONTHS * 30)
-    for i, a in enumerate(doc.get("assets") or []):
+    for i, a in enumerate(assets):
         if not isinstance(a, dict):
             continue
         label = f"assets[{a.get('id', i)}]"
+        # Freshness contract: every active record carries last_confirmed.
+        if a.get("status") == "active" and a.get("last_confirmed") is None:
+            if v2_compat:
+                warn(label, "active entry without last_confirmed — required "
+                            "once you migrate to format 3 (a date, or the "
+                            "literal unknown)")
+            else:
+                err(label, "active entry must carry last_confirmed — a date, "
+                           "or the literal unknown if you honestly don't know")
         if a.get("type") == "crypto":
             if not a.get("access_pointer"):
                 warn(label, "crypto asset without access_pointer — if the executor "
@@ -251,20 +315,35 @@ def main() -> int:
                 warn(label, f"crypto asset with priority \"{a.get('priority')}\" — "
                             "a missed wallet is unrecoverable; critical or high "
                             "is expected")
-        lc = as_date(a.get("last_confirmed"))
-        if lc is not None and lc < stale_before:
-            warn(label, f"last_confirmed {lc.isoformat()} is over "
-                        f"{STALE_MONTHS} months old — re-confirm this entry "
-                        "at your next review")
+        if a.get("preferred_action") == "transfer" and not a.get("beneficiary"):
+            warn(label, "preferred_action is transfer but no beneficiary is "
+                        "named — the executor has to guess the recipient")
+        for dep in (a.get("depends_on") or []):
+            if isinstance(dep, str) and dep not in all_ids:
+                err(label, f"depends_on references '{dep}', which does not "
+                           "exist in this register")
+            elif dep == a.get("id"):
+                err(label, "depends_on references itself")
+        lc = a.get("last_confirmed")
+        if lc == "unknown":
+            warn(label, "last_confirmed is unknown — honest, but worth "
+                        "confirming at your next review")
+        else:
+            lc_date = as_date(lc)
+            if lc_date is not None and lc_date < stale_before:
+                warn(label, f"last_confirmed {lc_date.isoformat()} is over "
+                            f"{STALE_MONTHS} months old — re-confirm this entry "
+                            "at your next review")
 
-    jsonschema_pass(doc, target)
+    if not v2_compat and fmt == 3:
+        jsonschema_pass(doc, target)
 
     for w in warnings:
         print(f"  warning  {w}")
     for e in errors:
         print(f"  ERROR    {e}")
 
-    n_assets = len(doc.get("assets") or []) if isinstance(doc.get("assets"), list) else 0
+    n_assets = len(assets)
     if errors:
         print(f"\n[strict] {target}: {len(errors)} error(s), {len(warnings)} warning(s).")
         return 1

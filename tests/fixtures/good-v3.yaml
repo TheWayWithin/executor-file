@@ -1,0 +1,84 @@
+# A valid format 3 register exercising the v3 additions: jurisdictions
+# array, settle/preserve actions, first_step, depends_on, beneficiary,
+# billing_cycle, unknown last_confirmed, contacts, documents.
+# Both tiers must PASS this (warnings allowed).
+meta:
+  format_version: 3
+  owner: Vee Three
+  updated: 2026-07-17
+  jurisdictions: [US-NY, UK]
+  domicile: US-NY
+  password_manager: "1Password — Emergency Kit with the solicitor"
+
+assets:
+  - id: A001
+    provider: Big Bank
+    type: cash
+    identifier: "a/c …1111"
+    priority: high
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-01
+    preferred_action: liquidate
+    action_notes: Balance to the estate account.
+    access_pointer: "1Password > Big Bank"
+
+  - id: A002
+    provider: Card Co
+    type: liability
+    identifier: "card …2222"
+    priority: high
+    ownership: sole
+    status: active
+    last_confirmed: unknown
+    billing_cycle: monthly
+    preferred_action: settle
+    action_notes: Settle the balance from the estate.
+    access_pointer: "1Password > Card Co"
+
+  - id: A003
+    provider: Cold wallet
+    type: crypto
+    identifier: "wallet: main"
+    priority: critical
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-01
+    preferred_action: transfer
+    beneficiary: Jo Three
+    first_step: Secure the device and seed backup. Move nothing yet.
+    depends_on: [A004]
+    action_notes: Seed backup lives in the deposit box (A004).
+    access_pointer: "1Password > Ledger"
+
+  - id: A004
+    provider: Deposit box
+    type: other
+    identifier: "box …9"
+    priority: critical
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-01
+    preferred_action: notify-only
+    action_notes: Needs death certificate; holds the seed backup for A003.
+    access_pointer: "Key in the fireproof box"
+
+  - id: A005
+    provider: Photo archive
+    type: other
+    identifier: "cloud library"
+    priority: normal
+    ownership: sole
+    status: closed
+    preferred_action: preserve
+    action_notes: Already exported to the family drive; account closed.
+
+contacts:
+  - role: solicitor
+    name: Priya Solicitor
+    pointer: "+1 555 0100"
+    note: Holds the original will.
+
+documents:
+  - name: Will (original)
+    location: Solicitor's deeds storage

@@ -1,0 +1,75 @@
+# ─────────────────────────────────────────────────────────────
+# Executor File — MINIMAL example register (format 3)
+#
+# The smallest honest register: one bank account, one recurring
+# charge, one email account, and where the will is. If filling in
+# the full example feels like too much today, start from this one —
+# a register this small already saves your executor weeks.
+#
+# Copy to estate.yaml, replace the dummy data, then:
+#   scripts/validate.sh
+# ─────────────────────────────────────────────────────────────
+
+meta:
+  format_version: 3
+  owner: Alex Example
+  updated: 2026-07-17
+  jurisdictions: [UK]
+  password_manager: >
+    Bitwarden. Emergency access is configured for Jo Example (takes
+    7 days to activate — that delay is deliberate).
+
+assets:
+  - id: A001
+    provider: Barclays
+    type: cash
+    identifier: "current a/c …4321"
+    priority: high
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-17
+    preferred_action: liquidate
+    action_notes: >
+      Main current account. Notify Barclays bereavement services; balance
+      to the estate account.
+    access_pointer: "Bitwarden > Barclays"
+
+  - id: A002
+    provider: Netflix
+    type: subscription
+    identifier: "billed to the Barclays account"
+    priority: normal
+    ownership: sole
+    status: active
+    last_confirmed: unknown
+    billing_cycle: monthly
+    preferred_action: cancel
+    action_notes: Cancel — nothing to keep.
+    access_pointer: "Bitwarden > Netflix"
+
+  - id: A003
+    provider: Gmail
+    type: other
+    identifier: "alex.example@gmail.com"
+    priority: high
+    ownership: sole
+    status: active
+    last_confirmed: 2026-07-17
+    preferred_action: preserve
+    first_step: >
+      Keep this account alive until every other account is settled — most
+      password resets and provider notices land here.
+    action_notes: >
+      Everything else resets through this inbox. Close it LAST, after the
+      estate is settled.
+    access_pointer: "Bitwarden > Google"
+
+contacts:
+  - role: solicitor
+    name: Rowan Solicitor, High St Law
+    pointer: "01234 567890"
+    note: Holds the original will.
+
+documents:
+  - name: Will (original)
+    location: High St Law, document storage

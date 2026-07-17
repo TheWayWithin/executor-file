@@ -33,11 +33,19 @@ fi
 
 echo "== validator fixtures (baseline tier) =="
 run_base() { sh "$ROOT/scripts/validate.sh" "$1" >/dev/null 2>&1; }
-run_base "$ROOT/tests/fixtures/good-v2.yaml";     check "good-v2 passes baseline" 0 $?
+run_base "$ROOT/tests/fixtures/good-v2.yaml";     check "good-v2 passes baseline (compat, migrate warning)" 0 $?
+run_base "$ROOT/tests/fixtures/good-v3.yaml";     check "good-v3 passes baseline" 0 $?
+run_base "$ROOT/examples/estate.example.yaml";    check "full example passes baseline" 0 $?
+run_base "$ROOT/examples/estate.minimal.yaml";    check "minimal example passes baseline" 0 $?
 run_base "$ROOT/tests/fixtures/warn-crypto.yaml"; check "warn-crypto passes baseline (warnings only)" 0 $?
 run_base "$ROOT/tests/fixtures/bad-format1.yaml"; check "bad-format1 fails baseline" 1 $?
 run_base "$ROOT/tests/fixtures/bad-secrets.yaml"; check "bad-secrets fails baseline" 1 $?
 run_base "$ROOT/tests/fixtures/bad-enum.yaml";    check "bad-enum fails baseline" 1 $?
+run_base "$ROOT/tests/fixtures/bad-v3-noconfirm.yaml"; check "active-without-last_confirmed fails baseline (v3)" 1 $?
+run_base "$ROOT/tests/fixtures/bad-v3-dep.yaml";  check "dangling depends_on fails baseline (v3)" 1 $?
+
+sh "$ROOT/scripts/validate.sh" "$ROOT/tests/fixtures/good-v2.yaml" 2>/dev/null | grep -q "format_version is 2" \
+  && ok "good-v2 gets the v2->v3 migrate warning" || fail "good-v2 missing the migrate warning"
 
 sh "$ROOT/scripts/validate.sh" "$ROOT/tests/fixtures/bad-format1.yaml" 2>/dev/null | grep -q "format 1 register" \
   && ok "bad-format1 gets the migrate message" || fail "bad-format1 missing migrate message"
@@ -46,7 +54,7 @@ sh "$ROOT/scripts/validate.sh" "$ROOT/tests/fixtures/bad-format1.yaml" 2>/dev/nu
 
 echo "== validator fixtures (strict tier + tier agreement, §3.3) =="
 if [ "$HAVE_STRICT" -eq 1 ]; then
-  for f in good-v2 warn-crypto bad-format1 bad-secrets bad-enum; do
+  for f in good-v2 good-v3 warn-crypto bad-format1 bad-secrets bad-enum bad-v3-noconfirm bad-v3-dep; do
     sh "$ROOT/scripts/validate.sh" "$ROOT/tests/fixtures/$f.yaml" >/dev/null 2>&1; base_rc=$?
     "$PYTHON" "$ROOT/scripts/validate.py" "$ROOT/tests/fixtures/$f.yaml" >/dev/null 2>&1; strict_rc=$?
     if [ "$base_rc" -eq "$strict_rc" ]; then
