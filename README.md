@@ -13,7 +13,7 @@ Two artefacts carry everything:
 
 A security-literate reader should be able to verify each of these directly from this repo:
 
-1. **No secrets at rest.** The register stores *pointers* ("1Password > HSBC", "seed backup in deposit box …22") — never credentials, full account numbers, or seed phrases. The validators actively reject long digit runs and flag written-out credentials.
+1. **No account credentials in the register.** It stores *pointers* ("1Password > HSBC", "seed backup in deposit box …22") — never passwords, full account numbers, or seed phrases. The validators actively reject long digit runs and flag written-out credentials. (The system does deliberately hold two secrets *outside* the register: the passphrase in your password manager, and its shares on paper — that is the design, stated honestly, not an oversight.)
 2. **No service dependency.** Encryption is [`age`](https://age-encryption.org) in passphrase mode; secret-splitting is [`ssss`](http://point-at-infinity.org/ssss/) (Shamir's Secret Sharing). Both are open-source, packaged everywhere, and operate on local files. If this repo and its author vanish, your Executor File still opens with two standard commands.
 3. **No single point of compromise.** The passphrase is split 2-of-3: three people each hold one printed share. Any two reconstruct it; any one alone learns nothing (information-theoretically, not just computationally). While you are alive, no individual shareholder can open the record.
 4. **No single point of failure.** One lost share, one dead shareholder, one lost backup of the `.age` file — none of them is fatal. The encrypted file is useless without two shares, so it can be backed up across private locations freely.
@@ -40,7 +40,7 @@ Requirements: `age` (≥ 1.3 recommended) and `ssss` — `brew install age ssss`
 ```bash
 # 1. Start from the example and fill in your real assets
 cp examples/estate.example.yaml estate.yaml
-$EDITOR estate.yaml            # estate.yaml is git-ignored
+nano estate.yaml               # or your usual editor — estate.yaml is git-ignored
 
 # 2. Check it — structure, allowed values, and the no-secrets rules
 scripts/validate.sh
@@ -53,7 +53,7 @@ scripts/setup.sh
 
 # 4. Follow its printed checklist: hand-copy the shares, save the
 #    passphrase in your password manager, fill in and print the
-#    Executor Instructions (with the SHA-256 it shows you).
+#    Executor Instructions.
 ```
 
 For every future update, one command:

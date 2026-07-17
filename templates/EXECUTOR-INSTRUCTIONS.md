@@ -21,7 +21,7 @@ I keep a single encrypted file — my **Executor File** — listing **every acco
    - `[LOCATION 1 — e.g. USB stick in the fireproof box at home]`
    - `[LOCATION 2 — e.g. attached to the will at the solicitor's / cloud drive folder]`
 
-   Its SHA-256 checksum is `[FILL IN — printed by setup.sh]`. To confirm your copy is uncorrupted, run `shasum -a 256 estate.yaml.age` (Mac) or `sha256sum estate.yaml.age` (Linux) and compare.
+   (You may find a small `estate.yaml.age.sha256` file next to it — that exists only for comparing stored copies to each other. You do not need it: if decryption succeeds in Step 3, the file was intact.)
 3. **Any two of these three people** — each holds one printed share:
 
    | Share | Held by | Contact |
@@ -30,7 +30,7 @@ I keep a single encrypted file — my **Executor File** — listing **every acco
    | `estate-2-…` | `[NAME, relationship]` | `[phone / email]` |
    | `estate-3-…` | `[NAME, relationship]` | `[phone / email]` |
 
-4. **A Mac or Linux computer** — any will do, including a borrowed one. If you only have Windows, use its "WSL/Ubuntu" feature or, simpler, ask any of the share-holders or a technically comfortable friend to sit with you at a Mac. The whole process is three commands.
+4. **A trusted computer.** This process briefly exposes two shares, the reconstructed passphrase, and the full decrypted register — so do it only on a computer belonging to **you, the solicitor, or another person authorised in the estate**, preferably one with full-disk encryption (FileVault on a Mac, BitLocker on Windows — both are usually on by default). **Never** use a public, workplace, hotel, or casually borrowed machine. A Mac or Linux computer needs nothing special; on Windows, follow the separate Windows sheet stored with this page (or ask a technically comfortable, trusted person to sit with you — the whole process is three commands).
 
 ## Step 1 — install the two small tools (5 minutes)
 
@@ -82,12 +82,23 @@ Every entry has a `preferred_action` field — what I want done, subject always 
 | `delete` | Close the account and erase the contents |
 | `notify-only` | Just inform the provider; nothing else expected |
 
-Work in this order (each entry also carries a `priority` field — `critical` entries first):
+Work in this order — **preserve before you dispose**. Nothing on this list has to happen today, but things stop being recoverable when they lapse or move:
 
-1. **`crypto` entries first.** Cryptocurrency is **unrecoverable** if keys are lost or moved wrongly — do not rush, do not type any recovery words into any website, and get trusted technical help before touching it.
-2. **Subscriptions and other recurring charges** — every month costs the estate money.
-3. **Banks, brokers, insurers** — these follow their normal bereavement process (death certificate etc.); the register tells you they exist and what I want done.
-4. Everything else.
+1. **Secure, don't dispose.** Find and secure devices, recovery material, and anything other entries depend on (the register says what depends on what). For cryptocurrency: locate the device and seed backup and lock them away — **move no funds**, type no recovery words into any website or app, and get trusted technical help before touching them. Keep anything a business depends on (domains, hosting, payment processing) **running** for now — a lapsed domain or hosting bill can destroy value in days.
+2. **Understand your authority before moving anything.** Joint accounts, beneficiary designations, and trusts pass outside the will; selling or transferring assets can have tax consequences. Confirm with the solicitor what you may lawfully do first.
+3. **Stop money bleeding out.** Cancel subscriptions and recurring charges that nothing depends on — every month costs the estate money.
+4. **Then the rest, by `priority`.** Banks, brokers, and insurers follow their normal bereavement process (death certificate etc.); the register tells you they exist and what I want done.
+
+## After it is open — handling the file safely
+
+The decrypted `estate.yaml` is the complete map of the estate. Treat it like the will itself:
+
+- **Keep it on this computer only**, in your home folder or Documents — not on a USB stick that travels, not in a shared or public folder.
+- **Never email it unencrypted**, and never paste its contents into a chat, an online form, or an **AI tool** (ChatGPT, Claude, Copilot or similar) — you cannot take that back.
+- **To share it with the solicitor**, print it and hand it over, or take this file to them and open it together. If it must go electronically, ask the solicitor for their secure document upload — most firms have one.
+- **When you finish a session**, close the text editor and close the Terminal window entirely.
+- **When the estate is settled**, delete `estate.yaml` and empty the trash — knowing honestly that deletion hides the file but does not scrub the disk; that is another reason to use a trusted, disk-encrypted computer from the start.
+- **Knowing an account exists — even where its password lives — does not make it yours to log into.** Use each provider's bereavement process; that is what it exists for, and logging in as the deceased can breach provider terms and, in some places, the law.
 
 ## Two things to know
 

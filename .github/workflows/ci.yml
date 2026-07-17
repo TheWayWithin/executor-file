@@ -31,11 +31,14 @@ jobs:
       - name: Install Python validator dependencies
         run: python3 -m pip install --break-system-packages pyyaml jsonschema || python3 -m pip install pyyaml jsonschema
 
-      - name: Run test suite
-        run: tests/run-tests.sh
+      # CI is pinned to explicit mechanisms and fully non-interactive
+      # paths — an unpinned run that fell back to an interactive prompt
+      # (read -rs, expect against a real tty) would hang the pipeline.
+      - name: Run test suite (batchpass mechanism)
+        run: EXECUTOR_FILE_MECH=batchpass tests/run-tests.sh < /dev/null
 
       - name: Run test suite (forced expect mechanism)
-        run: EXECUTOR_FILE_MECH=expect tests/run-tests.sh
+        run: EXECUTOR_FILE_MECH=expect tests/run-tests.sh < /dev/null
 
       - name: Schema agreement (YAML reference vs JSON contract)
         run: python3 tests/schema-agreement.py

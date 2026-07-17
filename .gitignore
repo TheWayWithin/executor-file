@@ -12,7 +12,10 @@ estate.yml
 
 # Any encrypted register. The .age file should live outside the
 # repo anyway; this is belt-and-braces in case one is created here.
+# The .sha256 sidecar only hashes ciphertext, but it still describes
+# a private file — keep it out too.
 *.age
+*.age.sha256
 
 # Passphrase shares must never be written to disk at all — but if
 # someone redirects ssss output to a file, don't let git pick it up.

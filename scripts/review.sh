@@ -109,9 +109,17 @@ echo "Decrypted into a private temp folder (mode 700, auto-removed)."
 echo
 
 # ── edit + validate loop ────────────────────────────────────────────
-EDITOR_CMD="${EDITOR:-vi}"
+# $VISUAL wins over $EDITOR (the long-standing Unix convention); values
+# with arguments ("code --wait") work; unset falls back to nano (vi if
+# nano is missing) with a clear message.
+EDITOR_CMD="${VISUAL:-${EDITOR:-}}"
+if [ -z "$EDITOR_CMD" ]; then
+  if command -v nano >/dev/null 2>&1; then EDITOR_CMD="nano"; else EDITOR_CMD="vi"; fi
+  echo "(\$VISUAL and \$EDITOR are unset — opening $EDITOR_CMD. To use your"
+  echo " own editor next time: export EDITOR='code --wait' or similar.)"
+fi
 while :; do
-  "$EDITOR_CMD" "$PLAIN"
+  sh -c "$EDITOR_CMD \"\$1\"" sh "$PLAIN"
   if "$SCRIPT_DIR/validate.sh" "$PLAIN"; then
     break
   fi
@@ -140,23 +148,24 @@ cmp -s "$PLAIN" "$CHECK" || {
 }
 mv -f "$NEWOUT" "$IN"
 
+# Refresh the copy-comparison sidecar (used by scripts/verify-copies.sh
+# to confirm stored copies are identical — recovery never needs it;
+# age's authenticated encryption already proves integrity on decrypt).
 if command -v shasum >/dev/null 2>&1; then
-  CHECKSUM="$(shasum -a 256 "$IN" | cut -d' ' -f1)"
+  (cd "$(dirname "$IN")" && shasum -a 256 "$(basename "$IN")") > "$IN.sha256"
 else
-  CHECKSUM="$(sha256sum "$IN" | cut -d' ' -f1)"
+  (cd "$(dirname "$IN")" && sha256sum "$(basename "$IN")") > "$IN.sha256"
 fi
 
 echo
 echo "Review complete. $IN re-encrypted with the same passphrase —"
-echo "the shares your holders hold are still valid."
-echo
-echo "  New SHA-256:  $CHECKSUM"
+echo "the shares your holders hold are still valid. The .sha256 sidecar"
+echo "was refreshed alongside it."
 echo
 echo "Remaining hand-work:"
-echo "  • The printed Executor Instructions carry the file's SHA-256 —"
-echo "    update it there (the content changed, so the checksum did)."
 echo "  • Refresh every stored copy of $IN (USB sticks, private cloud)"
-echo "    with this new version."
+echo "    with this new version AND its new .sha256 sidecar — old copies"
+echo "    are now out of date (scripts/verify-copies.sh will spot this)."
 echo "  • If you confirmed individual entries are still accurate, set"
 echo "    their last_confirmed to ${TODAY} next time you edit."
 echo

@@ -2,20 +2,27 @@
 # setup.sh — create your Executor File in one verified command.
 #
 # Usage:
-#   scripts/setup.sh [--own] [-t THRESHOLD] [-n SHARES] [INPUT]
+#   scripts/setup.sh [--own] [INPUT]
 #
 #   INPUT    plaintext register (default: estate.yaml)
 #   --own    type your own passphrase (default: a strong one is
 #            generated for you — recommended)
-#   -t / -n  share scheme (default 2-of-3; 3-of-5 is the documented
-#            alternative for larger families)
+#
+# The share scheme is FIXED at 2-of-3: three printed shares, any two
+# reconstruct the passphrase, any one alone reveals nothing. It is
+# fixed because this exact scheme is what the proof stage, the test
+# suite, and the printed executor guide are built and verified
+# around. If your family genuinely needs a different scheme, fork
+# the repo, change THRESHOLD/NSHARES below, and re-verify the whole
+# chain yourself — configurable cryptography is how shares that open
+# nothing get issued.
 #
 # What it does, in one process, with the passphrase held in memory
 # only and never written to disk:
 #   1. validates the register (baseline tier — always runs)
 #   2. obtains the passphrase ONCE
-#   3. encrypts to INPUT.age
-#   4. splits that same passphrase into shares (ssss, 2-of-3)
+#   3. encrypts to INPUT.age (+ a .sha256 sidecar for comparing copies)
+#   4. splits that same passphrase into three shares (ssss, 2-of-3)
 #   5. PROVES the chain: reconstructs the passphrase from two of the
 #      just-issued shares and test-decrypts the .age file back to a
 #      byte-identical copy
@@ -33,13 +40,19 @@ NSHARES=3
 OWN=0
 IN=""
 
-usage() { sed -n '2,15p' "$0"; }
+usage() { sed -n '2,10p' "$0"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --own) OWN=1 ;;
-    -t) THRESHOLD="${2:?-t needs a value}"; shift ;;
-    -n) NSHARES="${2:?-n needs a value}"; shift ;;
+    -t|-n)
+      echo "error: the share scheme is fixed at 2-of-3 — $1 was removed." >&2
+      echo "A configurable scheme shipped a defect: the proof stage could" >&2
+      echo "never verify anything but 2-of-3, so other schemes failed setup" >&2
+      echo "every time. One deeply tested scheme beats configurable crypto." >&2
+      echo "If you truly need a different scheme, fork the repo, edit" >&2
+      echo "THRESHOLD/NSHARES in this script, and re-verify the whole chain." >&2
+      exit 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "error: unknown option: $1" >&2; usage >&2; exit 2 ;;
     *) IN="$1" ;;
@@ -49,6 +62,12 @@ done
 IN="${IN:-estate.yaml}"
 OUT="${IN}.age"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Interactive terminal? Decides whether the share-display ceremony
+# (one share at a time, screen cleared between) can run. Piped or
+# redirected runs (tests, CI) get a plain printout instead.
+IS_TTY=0
+if [ -t 0 ] && [ -t 1 ]; then IS_TTY=1; fi
 
 # ── preflight ────────────────────────────────────────────────────────
 missing=""
@@ -86,10 +105,6 @@ esac
 if [ ! -f "$IN" ]; then
   echo "error: register not found: $IN" >&2
   echo "hint: copy examples/estate.example.yaml to estate.yaml and edit it." >&2
-  exit 2
-fi
-if [ "$THRESHOLD" -gt "$NSHARES" ]; then
-  echo "error: threshold ($THRESHOLD) cannot exceed share count ($NSHARES)." >&2
   exit 2
 fi
 if [ -e "$OUT" ]; then
@@ -141,23 +156,66 @@ echo "Step 1/6 — validating $IN"
 echo
 
 # ── step 2: obtain the passphrase once ──────────────────────────────
+# Fallback word list for systems without /usr/share/dict/words:
+# 256 short, common, distinct words. 12 words drawn from 256 give
+# 12 x 8 = 96 bits — the honest figure, printed at generation time.
+WORDS256="acid acorn agree alarm amber angle apple april arch arena
+army aroma arrow atlas atom autumn award bacon badge baker
+bamboo banjo barn basil basket beach bean bear beetle bell
+belt bench berry bird bison blade blanket blast bloom blue
+board boat bone book boot bottle brain brave bread brick
+bridge broom brown brush bubble bucket bulb bull bundle cabin
+cactus cake camel camp canal candle canoe canyon card cargo
+carpet cart castle cat cave cedar cello chair chalk charm
+chart cheese chef cherry chess chest chief child cider cinema
+circle citrus city clam claw clay cliff clock cloud clover
+coach coal coast cobra cocoa coin comet coral cord corn
+cotton couch court cousin cove crab crane crater cream crest
+crew cricket crown cube curtain curve cycle daisy dance dart
+dawn deck deer delta desert desk dial diamond dice dime
+dinner dish dock dog dolphin dome donkey door dove dragon
+drum duck dune eagle earth east echo eel egg elbow
+elder elk elm ember engine fabric falcon fall fang farm
+feast feather fence fern ferry fiddle field fig finch fire
+fish flag flame flash fleet flint float flock floor flour
+flute foam fog forest fossil fox frame frost fruit galaxy
+garden garlic gate gecko gem giant ginger glass globe glove
+goat gold goose grain grape grass gravel green grove guitar
+hammer harbor harp hawk hazel heron hill honey hoof horse
+hotel house humor icicle igloo iron island ivory jacket jade
+jaguar jelly jewel judge juice jungle kayak kettle king kite
+kiwi koala ladder lagoon lake lantern"
+
+rand_index() { # $1 = modulus; prints 1..modulus
+  echo $(( ($(od -An -N4 -tu4 /dev/urandom | tr -d ' ') % $1) + 1 ))
+}
+
 gen_passphrase() {
-  # 8 random dictionary words ≈ 120+ bits; fallback: 30 random chars.
-  # Well inside ssss's 128-ASCII cap either way.
-  dict=/usr/share/dict/words
+  # Honest entropy: the real figure is computed from the real word
+  # count and printed (to stderr — stdout carries the passphrase).
+  # EXECUTOR_FILE_DICT overrides the dictionary path (tests use it).
+  dict="${EXECUTOR_FILE_DICT:-/usr/share/dict/words}"
   if [ -r "$dict" ]; then
     words="$(LC_ALL=C grep -E '^[a-z]{3,8}$' "$dict")"
     n="$(printf '%s\n' "$words" | wc -l | tr -d ' ')"
+    bits="$(awk -v n="$n" 'BEGIN { printf "%d", 8 * log(n) / log(2) }')"
+    echo "Drawing 8 words from $n eligible dictionary words ≈ $bits bits of entropy." >&2
     out=""
     for _ in 1 2 3 4 5 6 7 8; do
-      idx=$(( ($(od -An -N4 -tu4 /dev/urandom | tr -d ' ') % n) + 1 ))
+      idx="$(rand_index "$n")"
       out="$out-$(printf '%s\n' "$words" | sed -n "${idx}p")"
     done
     printf '%s' "${out#-}"
   else
-    # Bounded read: head closes nothing early, so pipefail stays happy.
-    chars="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'a-z0-9')"
-    printf '%.30s' "$chars" | sed 's/.\{5\}/&-/g; s/-$//'
+    echo "No system dictionary found — using the built-in 256-word list:" >&2
+    echo "drawing 12 words from 256 = 96 bits of entropy." >&2
+    out=""
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+      idx="$(rand_index 256)"
+      # shellcheck disable=SC2086
+      out="$out-$(printf '%s\n' $WORDS256 | sed -n "${idx}p")"
+    done
+    printf '%s' "${out#-}"
   fi
 }
 
@@ -191,7 +249,7 @@ FINALISED=0
 cleanup() {
   rm -rf "$WORK"
   if [ "$FINALISED" -ne 1 ]; then
-    rm -f "$OUT"
+    rm -f "$OUT" "$OUT.sha256"
     echo >&2
     echo "SETUP FAILED — nothing was finalised. The partial $OUT was removed;" >&2
     echo "your plaintext $IN is untouched. Nothing about this failure wrote" >&2
@@ -219,6 +277,7 @@ echo
 echo "Step 5/6 — proving the chain: shares -> passphrase -> decrypt -> byte-compare"
 S1="$(printf '%s\n' "$SHARES" | sed -n '1p')"
 S2="$(printf '%s\n' "$SHARES" | sed -n '2p')"
+S3="$(printf '%s\n' "$SHARES" | sed -n '3p')"
 RECOVERED="$(printf '%s\n%s\n' "$S1" "$S2" | ssss-combine -t "$THRESHOLD" 2>&1 >/dev/null | sed -n 's/^Resulting secret: //p')"
 if [ "$RECOVERED" != "$PASS" ]; then
   echo "error: passphrase reconstructed from the shares does not match the" >&2
@@ -238,55 +297,117 @@ echo "Chain verified: two of the issued shares reconstruct the passphrase,"
 echo "and it decrypts $OUT back to a byte-identical register."
 echo
 
-# ── step 6: report ──────────────────────────────────────────────────
+# ── step 6: sidecar, ceremony, checklist ────────────────────────────
+# The .sha256 sidecar exists to COMPARE STORED COPIES of the encrypted
+# file (scripts/verify-copies.sh) — it is not needed for recovery.
+# age is authenticated encryption: successful decryption already
+# proves the file is intact. Nothing checksum-shaped belongs on the
+# printed page, where it would rot at the next review.
 if command -v shasum >/dev/null 2>&1; then
-  CHECKSUM="$(shasum -a 256 "$OUT" | cut -d' ' -f1)"
+  (cd "$(dirname "$OUT")" && shasum -a 256 "$(basename "$OUT")") > "$OUT.sha256"
 else
-  CHECKSUM="$(sha256sum "$OUT" | cut -d' ' -f1)"
+  (cd "$(dirname "$OUT")" && sha256sum "$(basename "$OUT")") > "$OUT.sha256"
 fi
 FINALISED=1
 
 echo "Step 6/6 — done. Your Executor File is sealed."
 echo
 echo "  Encrypted register:  $OUT"
-echo "  SHA-256:             $CHECKSUM"
-echo "     (write this on the printed Executor Instructions so your"
-echo "      executor can confirm an uncorrupted copy)"
+echo "  Copy-check sidecar:  $OUT.sha256"
+echo "     (keep it next to every stored copy of $OUT; scripts/verify-copies.sh"
+echo "      uses it to confirm all your copies are identical)"
 echo
-echo "The $NSHARES shares — any $THRESHOLD open the file, fewer open nothing:"
-echo
-i=0
-printf '%s\n' "$SHARES" | while IFS= read -r share; do
-  i=$((i+1))
-  echo "  Share $i:  $share"
-done
-echo
-echo "Do these now, in order:"
-echo "  1. Copy each share onto its own sheet of paper BY HAND (or print"
-echo "     each separately). The 'estate-N-' prefix is part of the share."
-echo "     Double-check every character (0-9, a-f)."
-echo "  2. Give one share to each holder and tell them what it is. Never"
-echo "     store two shares in the same place; never in a file, photo,"
-echo "     email, or cloud note."
-echo "  3. Fill in templates/EXECUTOR-INSTRUCTIONS.md (including the"
-echo "     SHA-256 above), print it, store it with the will."
-echo "  4. Store $OUT in at least two private places (USB sticks in"
-echo "     separate locations, a private cloud copy). It is useless"
-echo "     without two shares."
-echo "  5. SAVE THE PASSPHRASE IN YOUR PASSWORD MANAGER now, as e.g."
-echo "     'Executor File passphrase'. That is YOUR way back into the"
-echo "     file at the next review; the shares are your executor's way."
-if [ "$OWN" -eq 0 ]; then
-  echo "     The passphrase is:"
+
+show_share() { # $1 = share number, $2 = share value
+  echo "  Share $1 of $NSHARES — copy it onto its own sheet of paper BY HAND:"
   echo
-  echo "       $PASS"
+  echo "      $2"
   echo
+  echo "  The 'estate-$1-' prefix is PART of the share. Double-check every"
+  echo "  character (the long part uses only 0-9 and a-f)."
+}
+
+if [ "$IS_TTY" -eq 1 ]; then
+  echo "The $NSHARES shares will now be shown ONE AT A TIME — any $THRESHOLD open the"
+  echo "file, fewer open nothing. Before continuing:"
+  echo
+  echo "  • Make sure nobody can see your screen."
+  echo "  • Stop any screen recording, screen sharing, or video call."
+  echo "  • Have $NSHARES sheets of paper and a pen ready."
+  echo
+  printf 'Press Enter to show share 1 of %s... ' "$NSHARES"
+  read -r _
+  i=0
+  for share in "$S1" "$S2" "$S3"; do
+    i=$((i+1))
+    printf '\033[2J\033[3J\033[H'
+    show_share "$i" "$share"
+    echo
+    if [ "$i" -lt "$NSHARES" ]; then
+      printf 'Press Enter once share %s is copied and checked — the screen clears, then share %s appears... ' "$i" "$((i+1))"
+    else
+      printf 'Press Enter once share %s is copied and checked — the screen clears... ' "$i"
+    fi
+    read -r _
+  done
+  printf '\033[2J\033[3J\033[H'
+  if [ "$OWN" -eq 0 ]; then
+    echo "Now the passphrase itself. Save it in your password manager as"
+    echo "'Executor File passphrase' — it is YOUR way back in at review time;"
+    echo "the shares are your executor's way."
+    echo
+    echo "      $PASS"
+    echo
+    printf 'Press Enter once it is saved in your password manager — the screen clears... '
+    read -r _
+    printf '\033[2J\033[3J\033[H'
+  fi
+else
+  echo "The $NSHARES shares — any $THRESHOLD open the file, fewer open nothing:"
+  echo
+  i=0
+  for share in "$S1" "$S2" "$S3"; do
+    i=$((i+1))
+    echo "  Share $i:  $share"
+  done
+  echo
+  if [ "$OWN" -eq 0 ]; then
+    echo "  SAVE THE PASSPHRASE IN YOUR PASSWORD MANAGER now, as e.g."
+    echo "  'Executor File passphrase'. That is YOUR way back into the"
+    echo "  file at the next review; the shares are your executor's way."
+    echo "     The passphrase is:"
+    echo
+    echo "       $PASS"
+    echo
+  fi
 fi
-echo "  6. About the plaintext $IN: deleting it reduces exposure but does"
+
+echo "Do these now, in order:"
+echo "  1. Hand-copy done? Give one share to each holder and tell them"
+echo "     what it is. Never store two shares in the same place; never"
+echo "     in a file, photo, email, or cloud note."
+echo "  2. Fill in and print templates/EXECUTOR-INSTRUCTIONS.md, and"
+echo "     store it with the will."
+echo "  3. Store $OUT (with its .sha256 sidecar) in at least two"
+echo "     private places (USB sticks in separate locations, a private"
+echo "     cloud copy). It is useless without two shares."
+if [ "$OWN" -eq 1 ]; then
+  echo "  4. SAVE YOUR PASSPHRASE IN YOUR PASSWORD MANAGER now, as e.g."
+  echo "     'Executor File passphrase'. That is YOUR way back into the"
+  echo "     file at the next review; the shares are your executor's way."
+else
+  echo "  4. Confirm the passphrase reached your password manager as"
+  echo "     'Executor File passphrase' — without it, your next review"
+  echo "     needs two of the shares you just handed out."
+fi
+echo "  5. About the plaintext $IN: deleting it reduces exposure but does"
 echo "     NOT erase history — SSDs, synced folders, snapshots, and editor"
 echo "     backups can retain copies. Work on a full-disk-encrypted"
 echo "     machine, keep $IN out of synced folders, and prefer"
 echo "     scripts/review.sh (which never leaves plaintext behind) for"
 echo "     future edits. Then delete $IN and empty the trash."
 echo
-echo "  Then clear this terminal:  clear && history -c"
+echo "When you are done: CLOSE THIS TERMINAL WINDOW ENTIRELY. Clearing"
+echo "the screen does not erase scrollback, terminal logs, or your"
+echo "shell's history file — closing the window discards this session's"
+echo "scrollback, which is the part you can actually control."
