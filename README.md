@@ -29,7 +29,7 @@ estate.yaml  --setup.sh-->  estate.yaml.age  +  share1 / share2 / share3
                             (your Executor File)   (2-of-3, printed on paper)
 ```
 
-On death, the executor reads the printed Executor Instructions, collects shares from two of the three holders, and runs three commands: install, `ssss-combine -t 2`, `age -d`. No account, no company, no login, no script of ours. The full walkthrough — written for a non-technical person under stress — is [`templates/EXECUTOR-INSTRUCTIONS.md`](templates/EXECUTOR-INSTRUCTIONS.md).
+On death, the executor reads the printed Executor Instructions, collects shares from two of the three holders, and runs three commands: install, `ssss-combine -t 2`, `age -d`. No account, no company, no login, no script of ours. The two-page walkthrough — written for a non-technical person under stress — is [`templates/EXECUTOR-INSTRUCTIONS.md`](templates/EXECUTOR-INSTRUCTIONS.md) (`scripts/make-guide.sh` fills it from your register); Windows recovery has [its own printed sheet](docs/WINDOWS-RECOVERY.md). After decrypting, [`scripts/render.sh`](scripts/render.sh) turns the register into a sorted, printable triage report — helpful, never required.
 
 **Your own way back in is simpler:** the passphrase lives in your password manager, like every other credential you own. The shares exist so your *executor* can get in without you; they are not your access path. At review time you type the passphrase, not collect shares.
 
@@ -38,11 +38,16 @@ On death, the executor reads the printed Executor Instructions, collects shares 
 Requirements: `age` (≥ 1.3 recommended) and `ssss` — `brew install age ssss` on macOS, `sudo apt install age ssss` on Debian/Ubuntu.
 
 ```bash
-# 1. Start from the example and fill in your real assets
+# 0. Optional pre-flight: tools, versions, synced-folder hazards
+scripts/doctor.sh
+
+# 1. Start from an example and fill in your real assets
+#    (examples/estate.minimal.yaml is the gentler starting point;
+#     docs/discovery-checklist.md is the "what am I forgetting" list)
 cp examples/estate.example.yaml estate.yaml
 nano estate.yaml               # or your usual editor — estate.yaml is git-ignored
 
-# 2. Check it — structure, allowed values, and the no-secrets rules
+# 2. Check it — structure, allowed values, and the no-credentials rules
 scripts/validate.sh
 
 # 3. Seal it: validate → encrypt → split → PROVE the chain, one command.
@@ -51,18 +56,25 @@ scripts/validate.sh
 #    test-decrypts back to a byte-identical copy before reporting success.
 scripts/setup.sh
 
-# 4. Follow its printed checklist: hand-copy the shares, save the
-#    passphrase in your password manager, fill in and print the
-#    Executor Instructions.
+# 4. Follow its printed checklist: hand-copy the shares (or print
+#    per-holder cover sheets with scripts/share-sheets.sh), save the
+#    passphrase in your password manager, and print the Executor
+#    Instructions — scripts/make-guide.sh fills them from your register.
+
+# 5. Prove the paper: the fire drill, with two printed shares
+scripts/test-recovery.sh
 ```
 
 For every future update, one command:
 
 ```bash
-scripts/review.sh    # decrypt to a private temp dir → edit → validate →
-                     # re-encrypt with the SAME passphrase (shares stay
-                     # valid) → verify → clean up
+scripts/review.sh    # decrypt to a private temp dir → staleness summary →
+                     # edit → validate → confirm freshness → re-encrypt with
+                     # the SAME passphrase (shares stay valid) → verify →
+                     # clean up + calendar nudges (.ics)
 ```
+
+Changing the passphrase itself — holder died, share lost, suspected compromise, executor change — is `scripts/rotate-shares.sh`: new passphrase, fresh shares, and it proves the old passphrase dead before declaring success. `scripts/verify-copies.sh` confirms every stored copy of the `.age` file is the same, current one.
 
 Then the physical part, which matters more than the software: put one printed share with each of three holders (e.g. executor, solicitor, family member) and tell them what it is; store `estate.yaml.age` in at least two private places; and set the platform legacy tools below.
 
@@ -79,7 +91,7 @@ Honesty over comfort: deleting `estate.yaml` **reduces exposure, it does not era
 
 ## What goes in the register
 
-The schema is documented in [`schema/estate.schema.yaml`](schema/estate.schema.yaml) (the annotated human reference) and formally specified in [`schema/estate.schema.json`](schema/estate.schema.json) (JSON Schema 2020-12 — any standard tool can validate a register without our scripts). A realistic dummy register is in [`examples/estate.example.yaml`](examples/estate.example.yaml). Registers carry `format_version: 2`.
+The formal schema is [`schema/estate.schema.json`](schema/estate.schema.json) (JSON Schema 2020-12, the single source of truth — any standard tool can validate a register without our scripts); [`schema/estate.schema.yaml`](schema/estate.schema.yaml) is its annotated human reference, and CI fails if the two ever disagree. Dummy registers: [`examples/estate.example.yaml`](examples/estate.example.yaml) (full) and [`examples/estate.minimal.yaml`](examples/estate.minimal.yaml) (the gentler start). Registers carry `format_version: 3` (format 2 still validates for this one version, with precise migrate steps). [`docs/discovery-checklist.md`](docs/discovery-checklist.md) is the "what am I forgetting" sweep, and [`AGENTS.md`](AGENTS.md) is the contract for AI-assisted authoring (hard rule: the AI never sees or stores a secret; you alone run the encryption).
 
 The load-bearing fields per asset:
 
@@ -87,10 +99,12 @@ The load-bearing fields per asset:
 - **`priority`** — `critical | high | normal | low`. The executor's triage order. Crypto belongs at critical or high: a missed wallet is unrecoverable, not merely delayed.
 - **`ownership`** — `sole | joint | beneficiary-designated | trust | business-owned | unknown`. A joint account and a sole account cannot share a generic "liquidate"; ownership decides what an executor may lawfully do.
 - **`status`** — `active | closed`. Closed accounts stay listed — a trail beats a vanishing.
-- **`preferred_action`** — `liquidate | cancel | transfer | delete | notify-only`, with `action_notes` saying it in your own words. *Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.* The register never overrides the will.
-- **`last_confirmed`** — optional per-entry date; the strict validator warns when an entry has not been confirmed for 18 months.
+- **`preferred_action`** — `liquidate | cancel | transfer | delete | notify-only | settle | preserve`, with `action_notes` saying it in your own words, `beneficiary` naming the recipient of a transfer, and `billing_cycle` letting the report sort recurring charges by burn rate. *Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.* The register never overrides the will.
+- **`first_step`** — what the executor should do *now*, decoupled from the eventual disposition ("Secure the device and recovery material. Do not transfer yet."). The triage doctrine is **preserve before dispose**.
+- **`depends_on`** — record IDs to handle first (`[A006]` — the deposit box holding the wallet's seed); the report orders work with it, the validators check the references exist.
+- **`last_confirmed`** — required on every active entry: a date, or the literal `unknown` as an honest signal. The strict validator warns past 18 months.
 
-`identifier` is a last-4 or reference only. `access_pointer` says where the login *lives* (your password manager), never what it is.
+Top-level `contacts` (solicitor, accountant, share holders…) and `documents` (will, deeds, policy schedules — locations only) round out what an executor actually needs. `identifier` is a last-4 or reference only. `access_pointer` says where the login *lives* (your password manager), never what it is.
 
 ### Validation, two tiers
 
@@ -124,28 +138,48 @@ In the UK there is no RUFADAA equivalent: executors have no statutory right of a
 | A service shuts down and breaks access | There is no service — static binaries and a local file |
 | Wrongful or early access | Shares are physical and held by trusted parties; access requires two humans agreeing |
 | Shares that open nothing (passphrase typo at setup) | `setup.sh` reconstructs the passphrase from the just-issued shares and test-decrypts before reporting success |
-| The record goes stale | Not solved by software alone — `review.sh` makes the update loop one command; `last_confirmed` tracks per-entry trust; `meta.updated` shows the executor how much to trust the whole |
+| The record goes stale | Not solved by software alone — `review.sh` makes the update loop one command, reports which entries are stale before you edit, and emits calendar nudges; `last_confirmed` is required on every active entry (`unknown` is an honest answer); the executor report lists stale entries so the reader knows what to double-check |
+| Shares rot while nobody looks | `test-recovery.sh` drills the real printed shares yearly and stamps the result on the printed guide; `rotate-shares.sh` re-keys when a holder or share is lost |
 
 ## Repository layout
 
 ```
 ├── README.md                       what you're reading
 ├── LICENSE                         MIT
+├── SECURITY.md                     reporting, threat boundaries, honest limits
+├── CONTRIBUTING.md                 the invariants and test expectations
+├── AGENTS.md                       contract for AI-assisted authoring
+├── RELEASE-CHECKLIST.md            the two human-gated release steps
+├── schema/estate.schema.json       formal contract (JSON Schema 2020-12) — source of truth
 ├── schema/estate.schema.yaml       annotated schema — the human reference
-├── schema/estate.schema.json       formal contract (JSON Schema 2020-12)
-├── examples/estate.example.yaml    dummy register, safe to commit
-├── templates/EXECUTOR-INSTRUCTIONS.md  printable page, blanks to fill
+├── examples/estate.example.yaml    full dummy register, safe to commit
+├── examples/estate.minimal.yaml    the gentler starting point
+├── templates/EXECUTOR-INSTRUCTIONS.md  the two-page printed guide
+├── docs/
+│   ├── WINDOWS-RECOVERY.md         printed sheet for a Windows recovery (WSL)
+│   └── discovery-checklist.md      what belongs in the register
 ├── scripts/
+│   ├── doctor.sh                   pre-flight: tools, hazards, register state
 │   ├── setup.sh                    create your Executor File: validate →
 │   │                               encrypt → split → prove the chain
-│   ├── review.sh                   the annual review in one command
+│   ├── review.sh                   the periodic review: staleness-aware,
+│   │                               same passphrase, .ics nudges
+│   ├── rotate-shares.sh            re-key: new passphrase, fresh shares,
+│   │                               old ones proven dead
+│   ├── test-recovery.sh            the fire drill, from printed shares
+│   ├── render.sh                   decrypted YAML → executor triage report
+│   ├── make-guide.sh               fill + print the Executor Instructions
+│   ├── share-sheets.sh             per-holder printable share cover sheets
+│   ├── verify-copies.sh            confirm stored copies are identical
 │   ├── validate.sh                 baseline validator (sh+awk, no deps);
 │   │                               --strict adds the Python tier
 │   ├── validate.py                 strict tier (python3 + PyYAML)
 │   ├── encrypt.sh                  manual building block: age -p wrapper
 │   ├── decrypt.sh                  manual building block: age -d wrapper
 │   └── split-secret.sh             manual building block: ssss-split wrapper
-└── .gitignore                      excludes estate.yaml and *.age
+├── tests/run-tests.sh              the whole suite (run it: both mechanisms)
+└── .gitignore                      excludes estate.yaml, *.age, and
+                                    everything derived from them
 ```
 
 Your executor never needs this repo — the printed Executor Instructions use `age` and `ssss` directly.

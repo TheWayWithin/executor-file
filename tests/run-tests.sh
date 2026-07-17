@@ -276,11 +276,15 @@ grep -q "NOT CONFIGURED" "$RMD" && ok "unconfigured legacy tool flagged" || fail
 grep -q "never confirmed" "$RMD" && ok "unknown-freshness entry flagged for verification" || fail "stale flag missing"
 grep -q '<div class="entry">' "$T/rr/executor-report.html" && ok "html report carries entries" || fail "html report empty"
 cp "$ROOT/examples/estate.minimal.yaml" "$T/rr/min.yaml"
-"$ROOT/scripts/render.sh" "$T/rr/min.yaml" > /dev/null 2>&1
-check "render.sh succeeds on the minimal example" 0 $?
+"$ROOT/scripts/render.sh" "$T/rr/min.yaml" > "$T/rr/min-render.log" 2>&1
+rc=$?
+check "render.sh succeeds on the minimal example" 0 $rc
+[ "$rc" -ne 0 ] && sed 's/^/    | /' "$T/rr/min-render.log"
 cp "$ROOT/tests/fixtures/good-v2.yaml" "$T/rr/v2.yaml"
-"$ROOT/scripts/render.sh" "$T/rr/v2.yaml" > /dev/null 2>&1
-check "render.sh still renders a format 2 register" 0 $?
+"$ROOT/scripts/render.sh" "$T/rr/v2.yaml" > "$T/rr/v2-render.log" 2>&1
+rc=$?
+check "render.sh still renders a format 2 register" 0 $rc
+[ "$rc" -ne 0 ] && sed 's/^/    | /' "$T/rr/v2-render.log"
 
 echo "== doctor.sh =="
 ( cd "$T/rr" && "$ROOT/scripts/doctor.sh" > doctor.log 2>&1 )

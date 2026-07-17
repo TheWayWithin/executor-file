@@ -28,41 +28,65 @@ All specs live in `ideation/` (moved from repo root, 17 Jul 2026):
 4. `ideation/SPEC.md` — the original MVP control spec. Historical record;
    do not edit.
 
-## Current state (16 Jul 2026, evening)
+## Current state (17 Jul 2026)
 
-- MVP complete and verified: crypto round-trip proven byte-identical, gitignore
-  + history clean, validator catches planted defects, executor walkthrough done.
+- **v0.3 "Executor Release" BUILT** (this session; see RELEASE-CHECKLIST.md
+  for the two remaining human gates — Windows dry run + physical fire
+  drill — which block the v0.3.0 tag). Everything scriptable is on main,
+  tested under both mechanisms, CI green on macOS + Ubuntu.
+- v0.3 highlights: threshold defect verified → **2-of-3 locked** (-t/-n
+  removed everywhere, loud refusal); printed SHA-256 replaced by a
+  `.sha256` sidecar + verify-copies.sh; share-display ceremony (one at a
+  time, honest close-the-terminal advice); 256-word fallback dictionary +
+  computed entropy figures; **schema v3** (settle/preserve, first_step,
+  depends_on, beneficiary, billing_cycle, meta.jurisdictions array,
+  contacts + documents; last_confirmed required for active, `unknown`
+  allowed; estate.schema.json is the single source of truth with a CI
+  drift test; v2 accepted this one version with migrate warnings);
+  **render.sh** (triage report md+html, preserve-before-dispose,
+  dependency-aware); **make-guide.sh** (fills the two-page
+  EXECUTOR-INSTRUCTIONS from the register + recovery-tests.log);
+  test-recovery.sh / rotate-shares.sh / share-sheets.sh / doctor.sh;
+  review.sh staleness flow + .ics nudges; docs/WINDOWS-RECOVERY.md (WSL
+  end-to-end — researched: no trustworthy native Windows ssss exists),
+  docs/discovery-checklist.md, AGENTS.md, SECURITY.md, CONTRIBUTING.md,
+  issue templates.
 - **§5.1 spike RESOLVED: batchpass wins.** `age-plugin-batchpass` (ships with
   age 1.3.1) emits a standard `-> scrypt` stanza; its output decrypts
   byte-identically with stock interactive `age -d`, and the reverse holds.
-  `setup.sh`/`review.sh` use batchpass, falling back to `expect` when the
-  plugin is absent (e.g. Ubuntu's age 1.1); `EXECUTOR_FILE_MECH` forces one.
-- **v0.2 SHIPPED** (commits d9b94a9 + b4725df on main, CI green on
-  macOS + Ubuntu, tests 37/37 both mechanisms): schema v2
-  (format_version, priority/ownership/status/last_confirmed,
-  action→preferred_action) in YAML + JSON Schema + example; two-tier
-  validation (validate.sh now pure POSIX sh+awk, `--strict` runs validate.py);
-  setup.sh (chain-proof: split → recombine → test-decrypt → cmp); review.sh
-  (same-passphrase re-encrypt, shares stay valid — verified); plaintext
-  honesty + Executor File language sweep; tests/run-tests.sh + fixtures +
-  schema-agreement check + GitHub Actions (macOS+Ubuntu, shellcheck).
-- Next work: **v0.3 "Executor Release"** — run the goal prompt in
-  `ideation/executor-file-v0.3-goal-prompt.md` in a fresh session. Its spec
-  supersedes SPEC-v1 §6 where they differ (notably: printed SHA-256 dropped
-  for a `.sha256` sidecar; 2-of-3 locked, threshold flags removed).
-- Awaiting Jamie: consolidation §2 (archive the old `digital-estate` repo
-  (Arm A) with a pointer README).
+  Owner scripts use batchpass, falling back to `expect` when the plugin is
+  absent (e.g. Ubuntu's age 1.1); `EXECUTOR_FILE_MECH` forces one. CI runs
+  expect against distro age first, then installs the official age 1.3.1
+  build (checksum-pinned) on Ubuntu for the batchpass run.
+- v0.2 history: commits d9b94a9 + b4725df (schema v2, two-tier validation,
+  setup/review orchestration).
+- Awaiting Jamie: the two RELEASE-CHECKLIST.md gates, and consolidation §2
+  (archive the old `digital-estate` repo (Arm A) with a pointer README).
 - Session learnings worth keeping: `expect -` treats the first argument as a
   script file, so heredoc expect scripts must take filenames via env vars,
   not argv; `tr < /dev/urandom | head` dies with SIGPIPE (141) under
-  `set -o pipefail` — bound the read first (this killed setup.sh on Ubuntu
-  CI, which has no /usr/share/dict/words).
+  `set -o pipefail` — bound the read first; expect's one-line
+  `expect { "pat" { act } timeout { act } }` treats the whole brace group
+  as ONE pattern — multi-pattern expect blocks must be written across
+  multiple lines; `&` in awk gsub/sub replacements means "the match" —
+  escape register-derived values before substituting them into templates;
+  never `git checkout --` a file whose only copy of new work is the
+  working tree.
 
 ## Locked decisions
 
 - **Naming:** product-facing prose says "your Executor File" (the encrypted
   register) and "Executor Instructions" (the printed page). Internal artefact
   names never change: `estate.yaml`, `estate.yaml.age`, script names.
+- **Share scheme locked at 2-of-3** (v0.3 spec §0.1 ruling, defect verified
+  empirically): no `-t`/`-n` anywhere; scripts refuse them loudly; 3-of-5 is
+  a fork-it-yourself note only.
+- **No checksum on the printed page** (v0.3 spec §0.2): age is authenticated
+  encryption; the `.sha256` sidecar compares stored copies, never gates
+  recovery.
+- **Executor-side AI export parked** (v0.3 spec §0.3): executors are told not
+  to paste the register into AI tools; render.sh serves that need instead.
+  Owner-side AI authoring is governed by AGENTS.md.
 - **Owner passphrase model (SPEC-v1 §4):** owner keeps the passphrase in their
   own password manager; Shamir shares are the executor's path, not the owner's.
   `review` re-encrypts with the same passphrase so shares stay valid.
