@@ -108,6 +108,51 @@ fi
 echo "Decrypted into a private temp folder (mode 700, auto-removed)."
 echo
 
+# ── freshness summary before the editor opens ───────────────────────
+# Per-record freshness (last_confirmed) and whole-file freshness
+# (meta.updated) are different facts; this report never conflates
+# them. staleness_report FILE MODE: MODE=summary prints the human
+# lines; MODE=stale prints just the stale count.
+staleness_report() { # $1=file $2=mode
+  awk -v today="$(date +%Y-%m-%d)" -v mode="$2" '
+    function months_old(d,   y, m) {
+      if (d !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-/) return -1
+      y = substr(d, 1, 4) + 0; m = substr(d, 6, 2) + 0
+      return (substr(today, 1, 4) * 12 + substr(today, 6, 2)) - (y * 12 + m)
+    }
+    /^[a-zA-Z_]+:/ { flush_a(); section = $0; sub(/:.*$/, "", section) }
+    section == "assets" && /^  - / { flush_a(); in_a = 1 }
+    section == "assets" && in_a && /^    status:/       { st = $0; sub(/^.*status:[ ]*/, "", st); sub(/[ ]+#.*$/, "", st) }
+    section == "assets" && in_a && /^    last_confirmed:/ { lc = $0; sub(/^.*last_confirmed:[ ]*/, "", lc); sub(/[ ]+#.*$/, "", lc); gsub(/"/, "", lc) }
+    section == "platform_legacy_tools" && /^    configured:[ ]*false/ { tools_off++ }
+    function flush_a() {
+      if (!in_a) return
+      if (st != "closed") {
+        active++
+        if (lc == "" ) missing++
+        else if (lc == "unknown") unknown++
+        else if (months_old(lc) > 18) old++
+      }
+      in_a = 0; st = ""; lc = ""
+    }
+    END {
+      flush_a()
+      stale = missing + unknown + old
+      if (mode == "stale") { print stale + 0; exit }
+      printf "  %d active record(s)", active + 0
+      if (old)     printf "; %d not confirmed in 18+ months", old
+      if (missing) printf "; %d missing confirmation dates", missing
+      if (unknown) printf "; %d marked unknown", unknown
+      if (tools_off) printf "; %d legacy tool(s) unconfigured", tools_off
+      printf "\n"
+      if (stale) printf "  While the editor is open, re-check those and set their last_confirmed.\n"
+    }
+  ' "$1"
+}
+echo "Freshness before this review:"
+staleness_report "$PLAIN" summary
+echo
+
 # ── edit + validate loop ────────────────────────────────────────────
 # $VISUAL wins over $EDITOR (the long-standing Unix convention); values
 # with arguments ("code --wait") work; unset falls back to nano (vi if
@@ -135,6 +180,56 @@ tmp_sed="$WORK/estate.updated.yaml"
 sed -E "s/^(  updated:[[:space:]]*).*/\1${TODAY}/" "$PLAIN" > "$tmp_sed"
 mv "$tmp_sed" "$PLAIN"
 echo "meta.updated set to ${TODAY}."
+echo
+
+# ── per-record freshness: only claim what actually happened ─────────
+# "Yes" means every ACTIVE entry was verified today: all their
+# last_confirmed dates move to today. "No" (the default) leaves every
+# per-record date exactly as edited — the file is fresh, the records
+# keep their own truth.
+printf 'Did you verify ALL active entries are accurate today? [y/N] '
+read -r verified_all || verified_all=n
+case "$verified_all" in
+  y|Y|yes|YES)
+    tmp_lc="$WORK/estate.confirmed.yaml"
+    awk -v today="$TODAY" '
+      function flush_block(   i, had_lc, is_active) {
+        if (nbuf == 0) return
+        is_active = 1; had_lc = 0
+        for (i = 1; i <= nbuf; i++) {
+          if (buf[i] ~ /^    status:[ ]*closed([ ]|$)/) is_active = 0
+          if (buf[i] ~ /^    last_confirmed:/) had_lc = 1
+        }
+        for (i = 1; i <= nbuf; i++) {
+          if (is_active && buf[i] ~ /^    last_confirmed:/)
+            buf[i] = "    last_confirmed: " today
+          print buf[i]
+          if (is_active && !had_lc && buf[i] ~ /^    status:/) {
+            print "    last_confirmed: " today
+            had_lc = 1
+          }
+        }
+        nbuf = 0
+      }
+      /^[a-zA-Z_]+:/ { flush_block(); in_assets = ($0 ~ /^assets:/); print; next }
+      in_assets && /^  - / { flush_block(); buf[++nbuf] = $0; next }
+      in_assets && nbuf > 0 { buf[++nbuf] = $0; next }
+      { print }
+      END { flush_block() }
+    ' "$PLAIN" > "$tmp_lc"
+    mv "$tmp_lc" "$PLAIN"
+    echo "All active entries: last_confirmed set to ${TODAY}."
+    ;;
+  *)
+    STALE_LEFT="$(staleness_report "$PLAIN" stale)"
+    if [ "${STALE_LEFT:-0}" -gt 0 ]; then
+      echo "Kept individual confirmation dates: file edited today, but ${STALE_LEFT} record(s) remain stale."
+      echo "(Confirm entries one by one by setting their last_confirmed as you check them.)"
+    else
+      echo "Kept individual confirmation dates — none are stale."
+    fi
+    ;;
+esac
 
 # ── re-encrypt with the SAME passphrase, verify, then replace ───────
 NEWOUT="$WORK/register.age"
@@ -157,10 +252,43 @@ else
   (cd "$(dirname "$IN")" && sha256sum "$(basename "$IN")") > "$IN.sha256"
 fi
 
+# ── calendar nudges: zero service dependency, just an .ics file ─────
+ICS="$(dirname "$IN")/executor-file-reminders.ics"
+awk -v today="$TODAY" '
+  function plus_months(d, n,   y, m) {
+    y = substr(d, 1, 4) + 0; m = substr(d, 6, 2) + 0
+    m = m + n
+    while (m > 12) { m -= 12; y++ }
+    # day 15: every month has one, no clamping surprises
+    return sprintf("%04d%02d15", y, m)
+  }
+  BEGIN {
+    stamp = substr(today, 1, 4) substr(today, 6, 2) substr(today, 9, 2) "T000000Z"
+    print "BEGIN:VCALENDAR"
+    print "VERSION:2.0"
+    print "PRODID:-//Executor File//review.sh//EN"
+    n = split("6:Executor File — six-month quick check (scripts/review.sh)|12:Executor File — annual full review (scripts/review.sh)|13:Executor File — annual fire drill (scripts/test-recovery.sh with two printed shares)", ev, "|")
+    for (i = 1; i <= n; i++) {
+      split(ev[i], p, ":")
+      print "BEGIN:VEVENT"
+      print "UID:executor-file-" p[1] "m-" stamp "@local"
+      print "DTSTAMP:" stamp
+      print "DTSTART;VALUE=DATE:" plus_months(today, p[1] + 0)
+      print "SUMMARY:" p[2]
+      print "END:VEVENT"
+    }
+    print "END:VCALENDAR"
+  }
+' > "$ICS"
+
 echo
 echo "Review complete. $IN re-encrypted with the same passphrase —"
 echo "the shares your holders hold are still valid. The .sha256 sidecar"
 echo "was refreshed alongside it."
+echo
+echo "Calendar nudges written to $ICS —"
+echo "double-click it (or import into any calendar) to book the"
+echo "six-month quick check, next annual review, and annual fire drill."
 echo
 echo "Remaining hand-work:"
 echo "  • Refresh every stored copy of $IN (USB sticks, private cloud)"

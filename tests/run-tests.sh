@@ -261,6 +261,121 @@ else
   skip "verify-copies tests need the setup.sh output from earlier"
 fi
 
+echo "== render.sh: the executor triage report =="
+mkdir -p "$T/rr"
+cp "$ROOT/examples/estate.example.yaml" "$T/rr/estate.yaml"
+"$ROOT/scripts/render.sh" "$T/rr/estate.yaml" > /dev/null 2>&1
+check "render.sh succeeds on the full example" 0 $?
+RMD="$T/rr/executor-report.md"
+[ -f "$RMD" ] && [ -f "$T/rr/executor-report.html" ] && ok "report written in md + html" || fail "report files missing"
+grep -q "Do first — secure, do not dispose" "$RMD" && ok "report leads with Do first" || fail "Do first section missing"
+grep -q "deal with A006 (First Republic safe deposit box) first" "$RMD" && ok "dependency line names A006 before the wallet" || fail "dependency line wrong/missing"
+grep -q "Money bleeding out" "$RMD" && ok "burn-rate section present" || fail "Money bleeding out missing"
+grep -q "settle — pay off from the estate" "$RMD" && ok "settle action rendered" || fail "settle action missing"
+grep -q "NOT CONFIGURED" "$RMD" && ok "unconfigured legacy tool flagged" || fail "unconfigured legacy tool not flagged"
+grep -q "never confirmed" "$RMD" && ok "unknown-freshness entry flagged for verification" || fail "stale flag missing"
+grep -q '<div class="entry">' "$T/rr/executor-report.html" && ok "html report carries entries" || fail "html report empty"
+cp "$ROOT/examples/estate.minimal.yaml" "$T/rr/min.yaml"
+"$ROOT/scripts/render.sh" "$T/rr/min.yaml" > /dev/null 2>&1
+check "render.sh succeeds on the minimal example" 0 $?
+cp "$ROOT/tests/fixtures/good-v2.yaml" "$T/rr/v2.yaml"
+"$ROOT/scripts/render.sh" "$T/rr/v2.yaml" > /dev/null 2>&1
+check "render.sh still renders a format 2 register" 0 $?
+
+echo "== doctor.sh =="
+( cd "$T/rr" && "$ROOT/scripts/doctor.sh" > doctor.log 2>&1 )
+check "doctor.sh passes on a working machine" 0 $?
+grep -q "Ready." "$T/rr/doctor.log" && ok "doctor reports Ready" || fail "doctor did not report Ready"
+
+echo "== test-recovery.sh: the fire drill =="
+if [ -n "${SETUP_PASS:-}" ]; then
+  ( cd "$T/setup" && printf '%s\n%s\n%s\n' "CI Tester" "$RS1" "$RS2" | "$ROOT/scripts/test-recovery.sh" estate.yaml.age > drill.log 2>&1 )
+  check "fire drill passes with two real shares" 0 $?
+  grep -q "DRILL PASSED" "$T/setup/drill.log" && ok "drill reports success plainly" || fail "drill success message missing"
+  grep -q "CI Tester" "$T/setup/recovery-tests.log" && ok "drill recorded date + tester" || fail "recovery-tests.log not written"
+  MUTSHARE="${RS2%?}0"; [ "$MUTSHARE" = "$RS2" ] && MUTSHARE="${RS2%?}1"
+  ( cd "$T/setup" && printf '%s\n%s\n%s\n' "CI Tester" "$RS1" "$MUTSHARE" | "$ROOT/scripts/test-recovery.sh" estate.yaml.age > drill-bad.log 2>&1 )
+  [ $? -ne 0 ] && ok "drill fails loudly on a mistyped share" || fail "drill passed with a bad share"
+  grep -q "DRILL FAILED" "$T/setup/drill-bad.log" && ok "drill failure names the cause" || fail "drill failure message missing"
+else
+  skip "fire-drill tests need the setup.sh outputs from earlier"
+fi
+
+echo "== make-guide.sh: filled Executor Instructions =="
+if [ -f "$T/setup/estate.yaml" ]; then
+  ( cd "$T/setup" && "$ROOT/scripts/make-guide.sh" estate.yaml > guide.log 2>&1 )
+  check "make-guide.sh fills the guide" 0 $?
+  GMD="$T/setup/EXECUTOR-INSTRUCTIONS-filled.md"
+  grep -q "Alex Example" "$GMD" && ok "owner filled from meta" || fail "owner not filled"
+  grep -q "Jo Example (spouse)" "$GMD" && ok "share holders filled from contacts" || fail "share holders not filled"
+  grep -q "Example & Co LLP, deeds storage" "$GMD" && ok "will location filled from documents" || fail "will location not filled"
+  grep -q "CI Tester" "$GMD" && ok "last recovery test line filled from the drill log" || fail "recovery-test line not filled"
+  grep -q "BRACKETED" "$T/setup/guide.log" && ok "generator warns on leftover [BRACKETS]" || fail "no leftover-bracket warning"
+  grep -q "FALLBACK" "$T/setup/guide.log" && ok "the leftover it found is the FALLBACK blank" || fail "FALLBACK blank not spotted"
+  [ -f "$T/setup/EXECUTOR-INSTRUCTIONS-filled.html" ] && ok "printable html guide written" || fail "html guide missing"
+else
+  skip "make-guide tests need the setup.sh outputs from earlier"
+fi
+
+echo "== review.sh: staleness flow + calendar =="
+if [ -n "${SETUP_PASS:-}" ]; then
+  ( cd "$T/setup" && printf '%s\ny\n' "$SETUP_PASS" | EDITOR=true "$ROOT/scripts/review.sh" estate.yaml.age > review-fresh.log 2>&1 )
+  check "review with verify-all=yes succeeds" 0 $?
+  grep -q "active record(s)" "$T/setup/review-fresh.log" && ok "pre-edit freshness summary shown" || fail "freshness summary missing"
+  grep -q "All active entries: last_confirmed set to" "$T/setup/review-fresh.log" && ok "yes updates every last_confirmed" || fail "confirm-all message missing"
+  if [ "${EXECUTOR_FILE_MECH:-batchpass}" = batchpass ] && command -v age-plugin-batchpass >/dev/null 2>&1; then
+    AGE_PASSPHRASE="$SETUP_PASS" age -d -j batchpass -o "$T/setup/after.yaml" "$T/setup/estate.yaml.age" 2>/dev/null
+    TODAY_D="$(date +%Y-%m-%d)"
+    N_UNCONF="$(grep -c "last_confirmed: $TODAY_D" "$T/setup/after.yaml")"
+    [ "$N_UNCONF" -ge 9 ] && ok "all 9 active entries carry today's last_confirmed" || fail "only $N_UNCONF entries confirmed today"
+    grep -q "last_confirmed: unknown" "$T/setup/after.yaml" && fail "an unknown survived confirm-all" || ok "the unknown entry was confirmed too"
+  else
+    skip "post-review content check needs batchpass"
+  fi
+  [ -f "$T/setup/executor-file-reminders.ics" ] && ok "reminder .ics written" || fail ".ics missing"
+  [ "$(grep -c 'BEGIN:VEVENT' "$T/setup/executor-file-reminders.ics")" = 3 ] && ok ".ics has the three nudges" || fail ".ics event count wrong"
+  ( cd "$T/setup" && printf '%s\nn\n' "$SETUP_PASS" | EDITOR=true "$ROOT/scripts/review.sh" estate.yaml.age > review-keep.log 2>&1 )
+  check "review with verify-all=no succeeds" 0 $?
+  grep -q "Kept individual confirmation dates" "$T/setup/review-keep.log" && ok "no preserves per-record dates" || fail "per-record preservation message missing"
+else
+  skip "staleness-flow tests need the setup.sh passphrase"
+fi
+
+echo "== share-sheets.sh =="
+SHEET_OUT="$T/sheets.log"
+printf 'Alex Example\nestate-1-aaaa\nestate-2-bbbb\nestate-3-cccc\n\n' | "$ROOT/scripts/share-sheets.sh" > "$SHEET_OUT" 2>&1
+check "share-sheets.sh runs end-to-end" 0 $?
+SHEET_DIR="$(sed -n 's|^  \(.*\)/share-1\.html$|\1|p' "$SHEET_OUT" | head -1)"
+[ -n "$SHEET_DIR" ] && ok "sheets were generated in a temp dir" || fail "no sheet path in output"
+[ ! -d "$SHEET_DIR" ] && ok "temp dir removed after printing step" || fail "temp sheet dir left behind: $SHEET_DIR"
+grep -q "spool" "$SHEET_OUT" && ok "printer spool warning shown" || fail "printer spool warning missing"
+
+echo "== rotate-shares.sh: full rotation, old shares dead =="
+if [ -n "${SETUP_PASS:-}" ]; then
+  ( cd "$T/setup" && printf '%s\n' "$SETUP_PASS" | "$ROOT/scripts/rotate-shares.sh" estate.yaml.age > rotate.log 2>&1 )
+  check "rotation succeeds with the current passphrase" 0 $?
+  grep -q "old passphrase no longer opens" "$T/setup/rotate.log" && ok "rotation proved the old key dead" || fail "old-key-dead proof missing"
+  NEW_PASS="$(awk '/The new one is:/{f=1;next} f && NF {print $1; exit}' "$T/setup/rotate.log")"
+  NRS1="$(sed -n 's/^  Share 1:  //p' "$T/setup/rotate.log")"
+  NRS2="$(sed -n 's/^  Share 2:  //p' "$T/setup/rotate.log")"
+  [ -n "$NEW_PASS" ] && [ -n "$NRS1" ] && [ -n "$NRS2" ] || fail "could not parse rotation output"
+  NREC="$(printf '%s\n%s\n' "$NRS1" "$NRS2" | ssss-combine -t 2 2>&1 >/dev/null | sed -n 's/^Resulting secret: //p')"
+  [ "$NREC" = "$NEW_PASS" ] && ok "new shares reconstruct the new passphrase" || fail "new shares do not reconstruct"
+  OREC="$(printf '%s\n%s\n' "$RS1" "$RS2" | ssss-combine -t 2 2>&1 >/dev/null | sed -n 's/^Resulting secret: //p')"
+  if command -v age-plugin-batchpass >/dev/null 2>&1; then
+    AGE_PASSPHRASE="$OREC" age -d -j batchpass -o "$T/setup/dead.yaml" "$T/setup/estate.yaml.age" 2>/dev/null
+    [ $? -ne 0 ] && ok "OLD shares no longer open the rotated file" || fail "old shares still open the rotated file"
+    AGE_PASSPHRASE="$NEW_PASS" age -d -j batchpass -o "$T/setup/alive.yaml" "$T/setup/estate.yaml.age" 2>/dev/null
+    [ $? -eq 0 ] && ok "new passphrase opens the rotated file" || fail "new passphrase does not open the file"
+  else
+    skip "dead/alive decrypt checks need batchpass"
+  fi
+  ( cd "$T/setup" && printf '%s\n' 'wrong-passphrase' | "$ROOT/scripts/rotate-shares.sh" estate.yaml.age > rotate-bad.log 2>&1 )
+  [ $? -ne 0 ] && ok "rotation refuses a wrong current passphrase" || fail "rotation accepted a wrong passphrase"
+else
+  skip "rotation tests need the setup.sh passphrase"
+fi
+
 echo "== P0 regression: interactive share ceremony (one at a time) =="
 if command -v expect >/dev/null 2>&1; then
   mkdir -p "$T/cer"
