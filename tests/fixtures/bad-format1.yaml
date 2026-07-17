@@ -1,0 +1,17 @@
+# A format-1 register: no format_version, old "action" field names,
+# missing priority/ownership/status. Both validator tiers must FAIL
+# this with a migrate message, never silently misparse it.
+meta:
+  owner: Old Format
+  updated: 2025-01-01
+  jurisdiction_primary: UK
+  password_manager: "1Password, kit with solicitor"
+
+assets:
+  - id: A001
+    provider: HSBC UK
+    type: cash
+    identifier: "current a/c …1234"
+    action: liquidate
+    action_notes: "Close and move to estate account."
+    access_pointer: "1Password > HSBC"

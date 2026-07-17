@@ -1,22 +1,31 @@
 # ─────────────────────────────────────────────────────────────
-# Digital Estate Register — schema definition (v1)
+# Executor File — schema definition (format 2)
 #
 # This file is both the human-readable field reference and the
-# machine-readable rule set: scripts/validate.sh loads it directly,
-# so the documentation and the validator cannot drift apart.
+# machine-readable rule set: scripts/validate.py loads it directly,
+# so the documentation and the strict validator cannot drift apart.
+# The zero-dependency baseline validator (scripts/validate.sh)
+# encodes the same rules in POSIX sh + awk; a fixture test in CI
+# asserts the two tiers agree. The formal contract for external
+# tools is schema/estate.schema.json (JSON Schema draft 2020-12).
 #
-# Golden rules, enforced by the validator where a machine can:
+# Golden rules, enforced by the validators where a machine can:
 #   1. No secrets. Ever. No passwords, no full account numbers,
 #      no seed phrases, no PINs. Pointers only.
-#   2. `type` and `action` are the load-bearing fields: `action`
-#      tells the executor what you want done; everything else
-#      exists to help them find the asset.
+#   2. `type` and `preferred_action` are the load-bearing fields:
+#      `preferred_action` tells the executor what you want done;
+#      everything else exists to help them find the asset.
 #   3. `identifier` is a last-4 or a reference — enough for the
 #      executor to name the asset to a provider, never enough for
 #      anyone to use it.
+#
+# Legal position, carried verbatim wherever preferred_action is
+# documented: preferred actions are practical guidance, subject to
+# the will, beneficiary designations, ownership rights, provider
+# terms, and applicable law.
 # ─────────────────────────────────────────────────────────────
 
-version: 1
+version: 2
 
 sections:
 
@@ -25,6 +34,14 @@ sections:
     kind: map
     doc: Who this register belongs to and where credentials actually live.
     fields:
+      format_version:
+        required: true
+        type: int
+        values_int: [2]
+        doc: >
+          Schema format of this file. Must be 2. Registers without it are
+          treated as format 1 and get a migrate message, never a silent
+          misparse.
       owner:
         required: true
         type: string
@@ -35,6 +52,7 @@ sections:
         doc: >
           Date of last review (YYYY-MM-DD). A stale register misleads the
           executor — update it at every will review, at minimum.
+          scripts/review.sh bumps this automatically.
       jurisdiction_primary:
         required: true
         type: string
@@ -86,6 +104,36 @@ sections:
           Last-4 digits or a reference ONLY — "current a/c …1234". Never a
           full account number, never a credential. The validator rejects
           long digit runs.
+      priority:
+        required: true
+        type: enum
+        values: [critical, high, normal, low]
+        doc: >
+          Triage order for the executor; renderers sort on it. Crypto and
+          anything bleeding money monthly belong at critical or high. The
+          validator warns if a crypto asset is below high.
+      ownership:
+        required: true
+        type: enum
+        values: [sole, joint, beneficiary-designated, trust, business-owned, unknown]
+        doc: >
+          How the asset is legally held. A joint account and a sole account
+          cannot share a generic "liquidate" — ownership decides what the
+          executor may lawfully do before anything else does.
+      status:
+        required: true
+        type: enum
+        values: [active, closed]
+        doc: >
+          Default guidance is "active". Mark closed accounts closed instead
+          of deleting the entry — a trail beats a vanishing.
+      last_confirmed:
+        required: false
+        recommended: true
+        type: date
+        doc: >
+          When you last confirmed this entry is still accurate (YYYY-MM-DD).
+          The strict validator warns when this is older than 18 months.
       jurisdiction:
         required: false
         type: string
@@ -96,7 +144,7 @@ sections:
         doc: >
           Rough value or cost, as text ("£12k", "liability ~$60/mo"). Helps
           the executor triage; precision is not the point.
-      action:
+      preferred_action:
         required: true
         type: enum
         values: [liquidate, cancel, transfer, delete, notify-only]
@@ -104,13 +152,17 @@ sections:
           What you want done. liquidate = sell/withdraw into the estate;
           cancel = stop the service/charge; transfer = pass to a named
           person; delete = close and erase; notify-only = inform the
-          provider, no other action expected.
+          provider, no other action expected. Renamed from "action" in
+          format 1 to say what it is: preferred actions are practical
+          guidance, subject to the will, beneficiary designations,
+          ownership rights, provider terms, and applicable law.
       action_notes:
         required: true
         type: string
         doc: >
-          The action in your own words — the executor acts on this. Name
-          names, state the destination, flag anything time-critical.
+          The preferred action in your own words — the executor acts on
+          this. Name names, state the destination, flag anything
+          time-critical.
       access_pointer:
         required: false
         recommended: true

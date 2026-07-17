@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install age, ssss, expect (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age ssss expect
+          age --version
+
+      - name: Install age, ssss (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install age ssss
+          age --version
+
+      - name: Install Python validator dependencies
+        run: python3 -m pip install --break-system-packages pyyaml jsonschema || python3 -m pip install pyyaml jsonschema
+
+      - name: Run test suite
+        run: tests/run-tests.sh
+
+      - name: Run test suite (forced expect mechanism)
+        run: EXECUTOR_FILE_MECH=expect tests/run-tests.sh
+
+      - name: Schema agreement (YAML reference vs JSON contract)
+        run: python3 tests/schema-agreement.py
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck -S warning scripts/*.sh tests/run-tests.sh

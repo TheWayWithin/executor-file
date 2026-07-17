@@ -21,16 +21,25 @@ became the product repo.
    its arbitrations (§1, §5) are binding.
 3. `SPEC.md` — the original MVP control spec. Historical record; do not edit.
 
-## Current state (16 Jul 2026)
+## Current state (16 Jul 2026, evening)
 
 - MVP complete and verified: crypto round-trip proven byte-identical, gitignore
   + history clean, validator catches planted defects, executor walkthrough done.
-- Next work: **v0.2 (SPEC-v1 §5)**. First task is the §5.1 spike: verify
-  whether `age-plugin-batchpass` output decrypts with stock interactive
-  `age -d`; that decides setup.sh's mechanism (batchpass vs expect).
-- Consolidation (§2): GitHub rename done, local folder renamed. Still pending:
-  archive the old `digital-estate` repo (Arm A) with a pointer README — needs
-  Jamie.
+- **§5.1 spike RESOLVED: batchpass wins.** `age-plugin-batchpass` (ships with
+  age 1.3.1) emits a standard `-> scrypt` stanza; its output decrypts
+  byte-identically with stock interactive `age -d`, and the reverse holds.
+  `setup.sh`/`review.sh` use batchpass, falling back to `expect` when the
+  plugin is absent (e.g. Ubuntu's age 1.1); `EXECUTOR_FILE_MECH` forces one.
+- **v0.2 BUILT (uncommitted, tests green 37/37 both mechanisms):** schema v2
+  (format_version, priority/ownership/status/last_confirmed,
+  action→preferred_action) in YAML + JSON Schema + example; two-tier
+  validation (validate.sh now pure POSIX sh+awk, `--strict` runs validate.py);
+  setup.sh (chain-proof: split → recombine → test-decrypt → cmp); review.sh
+  (same-passphrase re-encrypt, shares stay valid — verified); plaintext
+  honesty + Executor File language sweep; tests/run-tests.sh + fixtures +
+  schema-agreement check + GitHub Actions (macOS+Ubuntu, shellcheck).
+- Awaiting Jamie: review + commit of v0.2; consolidation §2 (archive the old
+  `digital-estate` repo (Arm A) with a pointer README).
 
 ## Locked decisions
 

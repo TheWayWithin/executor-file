@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://executorfile.com/schema/estate.schema.json",
+  "title": "Executor File register (format 2)",
+  "description": "An encrypted, self-hosted register of every account, asset, and liability a person owns, with what they want done about each one. Holds pointers only — never credentials, full account numbers, or seed material. Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.",
+  "type": "object",
+  "required": ["meta", "assets"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["format_version", "owner", "updated", "jurisdiction_primary", "password_manager"],
+      "additionalProperties": false,
+      "properties": {
+        "format_version": {
+          "description": "Schema format of this file. Must be 2.",
+          "const": 2
+        },
+        "owner": {
+          "description": "Full legal name of the register's owner.",
+          "type": "string",
+          "minLength": 1
+        },
+        "updated": {
+          "description": "Date of last review (YYYY-MM-DD).",
+          "type": "string",
+          "format": "date",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "jurisdiction_primary": {
+          "description": "Primary legal jurisdiction, e.g. \"US-NY\" or \"UK\".",
+          "type": "string",
+          "minLength": 1
+        },
+        "jurisdiction_secondary": {
+          "description": "Secondary jurisdiction, if assets span two legal systems.",
+          "type": "string"
+        },
+        "password_manager": {
+          "description": "Which password manager holds the actual credentials and how the executor gets emergency access. A pointer, never a secret.",
+          "type": "string",
+          "minLength": 1
+        },
+        "notes": {
+          "description": "Free-text context for the executor.",
+          "type": "string"
+        }
+      }
+    },
+    "assets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "provider", "type", "identifier", "priority", "ownership", "status", "preferred_action", "action_notes"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Stable unique reference — A001, A002, … Never reuse an ID.",
+            "type": "string",
+            "pattern": "^A[0-9]{3,}$"
+          },
+          "provider": {
+            "description": "Institution or service name as the executor would search for it.",
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "description": "What kind of thing this is. Crypto entries are treated as high priority — a missed wallet is unrecoverable, not merely delayed.",
+            "enum": ["cash", "liability", "subscription", "holding", "crypto", "online-business", "other"]
+          },
+          "identifier": {
+            "description": "Last-4 digits or a reference ONLY. Never a full account number, never a credential.",
+            "type": "string",
+            "minLength": 1
+          },
+          "priority": {
+            "description": "Triage order for the executor; renderers sort on it.",
+            "enum": ["critical", "high", "normal", "low"]
+          },
+          "ownership": {
+            "description": "How the asset is legally held. Ownership decides what the executor may lawfully do.",
+            "enum": ["sole", "joint", "beneficiary-designated", "trust", "business-owned", "unknown"]
+          },
+          "status": {
+            "description": "Default guidance is active. Mark closed accounts closed instead of deleting the entry.",
+            "enum": ["active", "closed"]
+          },
+          "last_confirmed": {
+            "description": "When this entry was last confirmed accurate (YYYY-MM-DD).",
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+          },
+          "jurisdiction": {
+            "description": "Where this asset legally sits, if different from meta.",
+            "type": "string"
+          },
+          "approx_value": {
+            "description": "Rough value or cost, as text. Precision is not the point.",
+            "type": "string"
+          },
+          "preferred_action": {
+            "description": "What you want done. Preferred actions are practical guidance, subject to the will, beneficiary designations, ownership rights, provider terms, and applicable law.",
+            "enum": ["liquidate", "cancel", "transfer", "delete", "notify-only"]
+          },
+          "action_notes": {
+            "description": "The preferred action in your own words — the executor acts on this.",
+            "type": "string",
+            "minLength": 1
+          },
+          "access_pointer": {
+            "description": "Where the login lives or where a physical key is kept. A signpost, not a secret.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "platform_legacy_tools": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["platform", "tool", "configured"],
+        "additionalProperties": false,
+        "properties": {
+          "platform": {
+            "description": "Apple, Google, Meta, …",
+            "type": "string",
+            "minLength": 1
+          },
+          "tool": {
+            "description": "The platform's name for it, e.g. \"Legacy Contact\".",
+            "type": "string",
+            "minLength": 1
+          },
+          "configured": {
+            "description": "Set true only once actually configured on the platform.",
+            "type": "boolean"
+          },
+          "contact": {
+            "description": "Who was designated, so the executor knows whom to coordinate with.",
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

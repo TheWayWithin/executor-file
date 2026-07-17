@@ -1,0 +1,27 @@
+# Invalid enum values and a duplicate id. Both tiers must FAIL this.
+meta:
+  format_version: 2
+  owner: Enum Breaker
+  updated: 2026-07-16
+  jurisdiction_primary: UK
+  password_manager: "1Password"
+
+assets:
+  - id: A001
+    provider: Somewhere
+    type: goldmine
+    identifier: "ref …1"
+    priority: urgent
+    ownership: sole
+    status: active
+    preferred_action: liquidate
+    action_notes: "n/a"
+  - id: A001
+    provider: Elsewhere
+    type: cash
+    identifier: "ref …2"
+    priority: high
+    ownership: sole
+    status: active
+    preferred_action: incinerate
+    action_notes: "n/a"

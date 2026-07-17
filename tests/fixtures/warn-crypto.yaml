@@ -1,0 +1,19 @@
+# Valid but warns: crypto asset at low priority with no access_pointer.
+# Both tiers must PASS this (exit 0) while emitting warnings.
+meta:
+  format_version: 2
+  owner: Warned Person
+  updated: 2026-07-16
+  jurisdiction_primary: UK
+  password_manager: "1Password, Emergency Kit in fireproof box"
+
+assets:
+  - id: A001
+    provider: Ledger wallet
+    type: crypto
+    identifier: "wallet label: main"
+    priority: low
+    ownership: sole
+    status: active
+    preferred_action: transfer
+    action_notes: "Seed backup location known to spouse."

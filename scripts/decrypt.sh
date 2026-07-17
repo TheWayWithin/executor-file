@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# decrypt.sh — decrypt the register with age.
+# decrypt.sh — decrypt your Executor File with age.
 #
 # Usage:
 #   scripts/decrypt.sh [INPUT] [OUTPUT]
@@ -8,11 +8,14 @@
 #   OUTPUT  where to write plaintext  (default: stdout — nothing
 #           touches the disk unless you say so)
 #
-# You will be prompted for the passphrase. An executor reconstructs it
-# from any two shares with:  ssss-combine -t 2
+# You will be prompted for the passphrase (owners: it is in your
+# password manager). An executor reconstructs it from any two shares
+# with:  ssss-combine -t 2
 #
-# (Executors don't need this script — the printed EXECUTOR-INSTRUCTIONS
-# use the age command directly. This is a convenience for the owner.)
+# (Executors don't need this script — the printed Executor
+# Instructions use the age command directly. This is a convenience
+# for the owner; for editing, prefer scripts/review.sh, which never
+# leaves plaintext behind.)
 set -euo pipefail
 
 IN="${1:-estate.yaml.age}"

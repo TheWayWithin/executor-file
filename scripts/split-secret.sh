@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# split-secret.sh — split the age passphrase into Shamir shares (2-of-3).
+# split-secret.sh — split your Executor File passphrase into Shamir
+# shares (2-of-3). Prefer scripts/setup.sh, which encrypts, splits,
+# and PROVES the chain in one command; this is the manual building
+# block.
 #
 # Usage:
 #   scripts/split-secret.sh [-t THRESHOLD] [-n SHARES] [-w TOKEN]

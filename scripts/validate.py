@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
-"""Validate an estate register against schema/estate.schema.yaml.
+"""Strict-tier validator for an Executor File register (format 2).
 
-Checks structure (required fields, types, enums, unique IDs) and — because
-the register's core promise is "no secrets stored" — rejects values that
-look like full account numbers and flags values that look like credentials.
+Driven by schema/estate.schema.yaml so documentation and validator cannot
+drift apart. Beyond the zero-dependency baseline (scripts/validate.sh),
+this tier adds: type checking of every field, per-entry staleness
+warnings (last_confirmed older than 18 months), coverage checks, and —
+if the optional `jsonschema` package is installed — validation against
+the formal contract in schema/estate.schema.json (JSON Schema 2020-12).
+
+Both tiers agree on what is an ERROR vs a WARNING; a fixture test in CI
+asserts it. This tier needs python3 + PyYAML; the baseline needs nothing.
+Invoke via:  scripts/validate.sh --strict
 
 Exit codes: 0 = valid, 1 = validation errors, 2 = couldn't run.
 """
 
 import datetime
+import json
 import re
 import sys
 from pathlib import Path
@@ -17,20 +25,24 @@ try:
     import yaml
 except ImportError:
     sys.stderr.write(
-        "error: this validator needs the PyYAML library.\n"
+        "error: this strict-tier validator needs the PyYAML library.\n"
         "  quick fix:  python3 -m pip install --user pyyaml\n"
         "  or a venv:  python3 -m venv .venv && .venv/bin/pip install pyyaml\n"
-        "              then: PYTHON=.venv/bin/python3 scripts/validate.sh\n"
-        "(Only the validator needs Python. Encrypt/decrypt/split do not,\n"
-        "and your executor never needs any of this.)\n"
+        "              then: PYTHON=.venv/bin/python3 scripts/validate.sh --strict\n"
+        "(Only this strict tier needs Python. The baseline validator,\n"
+        "encryption, and your executor's recovery path do not.)\n"
     )
     sys.exit(2)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = REPO_ROOT / "schema" / "estate.schema.yaml"
+JSON_SCHEMA_PATH = REPO_ROOT / "schema" / "estate.schema.json"
 
-# A run of 9+ digits (ignoring spaces/dashes between them) is treated as a
-# full account/card number — those must never be in the register.
+# Entries not re-confirmed for this long draw a staleness warning.
+STALE_MONTHS = 18
+
+# A run of 9+ digits (ignoring single spaces/dashes between them) is
+# treated as a full account/card number — those must never be in the register.
 DIGIT_RUN = re.compile(r"(?:\d[ -]?){9,}")
 # "password: xyz", "PIN = 1234", "seed phrase: word word …" — looks like an
 # actual credential written down, not a pointer to one.
@@ -50,21 +62,27 @@ def warn(where: str, msg: str) -> None:
     warnings.append(f"{where}: {msg}")
 
 
+def as_date(value):
+    """Return a datetime.date if value parses as one, else None."""
+    if isinstance(value, datetime.date):
+        return value
+    if isinstance(value, str):
+        try:
+            return datetime.date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None
+
+
 def type_ok(value, expected: str) -> bool:
     if expected == "string" or expected == "enum":
         return isinstance(value, str) and value.strip() != ""
     if expected == "bool":
         return isinstance(value, bool)
+    if expected == "int":
+        return isinstance(value, int) and not isinstance(value, bool)
     if expected == "date":
-        if isinstance(value, datetime.date):
-            return True
-        if isinstance(value, str):
-            try:
-                datetime.date.fromisoformat(value)
-                return True
-            except ValueError:
-                return False
-        return False
+        return as_date(value) is not None
     return True
 
 
@@ -103,13 +121,39 @@ def check_fields(data: dict, field_specs: dict, where: str) -> None:
             allowed = ", ".join(spec.get("values", []))
             err(where, f"field '{name}' has invalid value '{value}' "
                        f"(allowed: {allowed})")
+        if ftype == "int" and "values_int" in spec and value not in spec["values_int"]:
+            allowed = ", ".join(str(v) for v in spec["values_int"])
+            err(where, f"field '{name}' has invalid value {value} "
+                       f"(allowed: {allowed})")
         if "pattern" in spec and isinstance(value, str):
             if not re.fullmatch(spec["pattern"], value):
                 err(where, f"field '{name}' value '{value}' does not match "
                            f"pattern {spec['pattern']}")
     for name in data:
         if name not in field_specs:
-            warn(where, f"unknown field '{name}' (typo? not part of the schema)")
+            if name == "action" and "preferred_action" in field_specs:
+                err(where, "field \"action\" was renamed in format 2 — change it "
+                           "to \"preferred_action\" (same values)")
+            else:
+                warn(where, f"unknown field '{name}' (typo? not part of the schema)")
+
+
+def jsonschema_pass(doc, target: Path) -> None:
+    """Optional: validate against the formal JSON Schema contract."""
+    try:
+        import jsonschema
+    except ImportError:
+        print("  note     jsonschema package not installed — skipping the formal "
+              "JSON-Schema pass (python3 -m pip install --user jsonschema). "
+              "All schema rules above were still enforced.")
+        return
+    contract = json.loads(JSON_SCHEMA_PATH.read_text())
+    # YAML dates arrive as datetime.date; the JSON contract expects strings.
+    plain = json.loads(json.dumps(doc, default=str))
+    validator = jsonschema.Draft202012Validator(contract)
+    for e in sorted(validator.iter_errors(plain), key=lambda e: list(e.absolute_path)):
+        path = ".".join(str(p) for p in e.absolute_path) or target.name
+        err(f"[json-schema] {path}", e.message)
 
 
 def main() -> int:
@@ -137,6 +181,16 @@ def main() -> int:
                          "(meta / assets / platform_legacy_tools).\n")
         return 1
 
+    # Format gate first: a format-1 register gets a migrate message,
+    # never a silent misparse or a wall of field errors.
+    meta = doc.get("meta")
+    if isinstance(meta, dict) and meta.get("format_version") is None:
+        err("meta", "no format_version — this file is a format 1 register. "
+            "To migrate: add \"format_version: 2\" under meta, rename every "
+            "asset \"action:\" to \"preferred_action:\", and add \"priority:\", "
+            "\"ownership:\" and \"status:\" to each asset "
+            "(see examples/estate.example.yaml)")
+
     sections = schema["sections"]
 
     for sec_name, sec_spec in sections.items():
@@ -149,7 +203,10 @@ def main() -> int:
             if not isinstance(sec, dict):
                 err(sec_name, "should be a mapping of fields")
                 continue
-            check_fields(sec, sec_spec["fields"], sec_name)
+            specs = sec_spec["fields"]
+            if sec_name == "meta" and sec.get("format_version") is None:
+                specs = {k: v for k, v in specs.items() if k != "format_version"}
+            check_fields(sec, specs, sec_name)
         elif sec_spec["kind"] == "list":
             if not isinstance(sec, list):
                 err(sec_name, "should be a list of entries")
@@ -179,14 +236,28 @@ def main() -> int:
 
     scan_for_secrets(doc, target.name)
 
-    # Nudge: a crypto asset without an access pointer is a wallet the
-    # executor may never find.
+    # Coverage and staleness (strict tier only).
+    today = datetime.date.today()
+    stale_before = today - datetime.timedelta(days=STALE_MONTHS * 30)
     for i, a in enumerate(doc.get("assets") or []):
-        if isinstance(a, dict) and a.get("type") == "crypto":
+        if not isinstance(a, dict):
+            continue
+        label = f"assets[{a.get('id', i)}]"
+        if a.get("type") == "crypto":
             if not a.get("access_pointer"):
-                warn(f"assets[{a.get('id', i)}]",
-                     "crypto asset without access_pointer — if the executor "
-                     "can't find the keys, this asset is gone.")
+                warn(label, "crypto asset without access_pointer — if the executor "
+                            "cannot find the keys, this asset is gone")
+            if a.get("priority") not in (None, "critical", "high"):
+                warn(label, f"crypto asset with priority \"{a.get('priority')}\" — "
+                            "a missed wallet is unrecoverable; critical or high "
+                            "is expected")
+        lc = as_date(a.get("last_confirmed"))
+        if lc is not None and lc < stale_before:
+            warn(label, f"last_confirmed {lc.isoformat()} is over "
+                        f"{STALE_MONTHS} months old — re-confirm this entry "
+                        "at your next review")
+
+    jsonschema_pass(doc, target)
 
     for w in warnings:
         print(f"  warning  {w}")
@@ -195,9 +266,9 @@ def main() -> int:
 
     n_assets = len(doc.get("assets") or []) if isinstance(doc.get("assets"), list) else 0
     if errors:
-        print(f"\n✗ {target}: {len(errors)} error(s), {len(warnings)} warning(s).")
+        print(f"\n[strict] {target}: {len(errors)} error(s), {len(warnings)} warning(s).")
         return 1
-    print(f"\n✓ {target} is valid — {n_assets} asset(s), "
+    print(f"\n[strict] {target} is valid — {n_assets} asset(s), "
           f"{len(warnings)} warning(s).")
     return 0
 

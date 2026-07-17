@@ -1,4 +1,4 @@
-# Instructions for my executor: the digital estate register
+# Executor Instructions: opening my Executor File
 
 **Owner:** `[YOUR FULL NAME]`
 **Last updated:** `[DATE — update this every time you re-encrypt]`
@@ -9,7 +9,7 @@
 
 ## What this is
 
-I keep a single encrypted file listing **every account, asset, and liability I own**, with what I want done about each one. It is called `estate.yaml.age`.
+I keep a single encrypted file — my **Executor File** — listing **every account, asset, and liability I own**, with what I want done about each one. The file is called `estate.yaml.age`.
 
 - It contains **no passwords**. Logins live in my password manager: `[e.g. "1Password — its printed Emergency Kit is in the fireproof box"]`.
 - It is encrypted. The key was split into **three "shares"**, held by three people. **Any two shares open it; one alone opens nothing.** That is deliberate: no single person could read it while I was alive, and losing one share loses nothing.
@@ -20,6 +20,8 @@ I keep a single encrypted file listing **every account, asset, and liability I o
 2. **The encrypted file** `estate.yaml.age`, stored at:
    - `[LOCATION 1 — e.g. USB stick in the fireproof box at home]`
    - `[LOCATION 2 — e.g. attached to the will at the solicitor's / cloud drive folder]`
+
+   Its SHA-256 checksum is `[FILL IN — printed by setup.sh]`. To confirm your copy is uncorrupted, run `shasum -a 256 estate.yaml.age` (Mac) or `sha256sum estate.yaml.age` (Linux) and compare.
 3. **Any two of these three people** — each holds one printed share:
 
    | Share | Held by | Contact |
@@ -70,9 +72,9 @@ When it asks `Enter passphrase:`, type (or paste) the "Resulting secret" from St
 
 ## Step 4 — act on it, in this order
 
-Every entry has an `action` field — that is what I want done:
+Every entry has a `preferred_action` field — what I want done, subject always to the will, beneficiary designations, ownership rights, provider terms, and the law. The will wins if they ever disagree.
 
-| action | meaning |
+| preferred_action | meaning |
 |---|---|
 | `liquidate` | Sell / withdraw the value into the estate account |
 | `cancel` | Stop the service or recurring charge |
@@ -80,7 +82,7 @@ Every entry has an `action` field — that is what I want done:
 | `delete` | Close the account and erase the contents |
 | `notify-only` | Just inform the provider; nothing else expected |
 
-Work in this order:
+Work in this order (each entry also carries a `priority` field — `critical` entries first):
 
 1. **`crypto` entries first.** Cryptocurrency is **unrecoverable** if keys are lost or moved wrongly — do not rush, do not type any recovery words into any website, and get trusted technical help before touching it.
 2. **Subscriptions and other recurring charges** — every month costs the estate money.
@@ -101,4 +103,4 @@ Work in this order:
 
 ---
 
-*This register was made with the open-source Digital Estate Register tooling: `[REPO URL]`. The tooling is only a convenience — the file above opens with the two standard commands on this page, forever.*
+*This Executor File was made with the open-source Executor File tooling: `[REPO URL]`. The tooling is only a convenience — the file above opens with the two standard commands on this page, forever.*
