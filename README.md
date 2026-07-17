@@ -37,41 +37,54 @@ On death, the executor reads the printed Executor Instructions, collects shares 
 
 Requirements: `age` (≥ 1.3 recommended) and `ssss` — `brew install age ssss` on macOS, `sudo apt install age ssss` on Debian/Ubuntu.
 
+One command per step — several are interactive, so run each and read what it says before moving on.
+
+**0. Pre-flight (optional).** Checks tools, versions, and synced-folder hazards; changes nothing:
+
 ```bash
-# 0. Optional pre-flight: tools, versions, synced-folder hazards
 scripts/doctor.sh
+```
 
-# 1. Start from an example and fill in your real assets
-#    (examples/estate.minimal.yaml is the gentler starting point;
-#     docs/discovery-checklist.md is the "what am I forgetting" list)
+**1. Start from an example and fill in your real assets.** `estate.yaml` is git-ignored. (`examples/estate.minimal.yaml` is the gentler starting point; [`docs/discovery-checklist.md`](docs/discovery-checklist.md) is the "what am I forgetting" list.)
+
+```bash
 cp examples/estate.example.yaml estate.yaml
-nano estate.yaml               # or your usual editor — estate.yaml is git-ignored
+```
 
-# 2. Check it — structure, allowed values, and the no-credentials rules
+Then edit it with your usual editor:
+
+```bash
+nano estate.yaml
+```
+
+**2. Check it** — structure, allowed values, and the no-credentials rules:
+
+```bash
 scripts/validate.sh
+```
 
-# 3. Seal it: validate → encrypt → split → PROVE the chain, one command.
-#    It generates a strong passphrase, encrypts, splits the passphrase
-#    2-of-3, then reconstructs it from two of the just-issued shares and
-#    test-decrypts back to a byte-identical copy before reporting success.
+**3. Seal it** — validate → encrypt → split → **prove the chain**, one command. It generates a strong passphrase, encrypts, splits the passphrase 2-of-3, then reconstructs it from two of the just-issued shares and test-decrypts back to a byte-identical copy before reporting success:
+
+```bash
 scripts/setup.sh
+```
 
-# 4. Follow its printed checklist: hand-copy the shares (or print
-#    per-holder cover sheets with scripts/share-sheets.sh), save the
-#    passphrase in your password manager, and print the Executor
-#    Instructions — scripts/make-guide.sh fills them from your register.
+**4. Do the physical part its checklist walks you through:** hand-copy the shares as they are shown (or print per-holder cover sheets with `scripts/share-sheets.sh`), save the passphrase in your password manager, then print the Executor Instructions — filled in from your register:
 
-# 5. Prove the paper: the fire drill, with two printed shares
+```bash
+scripts/make-guide.sh
+```
+
+**5. Prove the paper** — the fire drill, with two printed shares in hand:
+
+```bash
 scripts/test-recovery.sh
 ```
 
-For every future update, one command:
+For every future update, one command — it decrypts to a private temp dir, shows a staleness summary, opens your editor, validates, asks what you actually verified, re-encrypts with the **same** passphrase (shares stay valid), verifies the result, cleans up, and drops calendar nudges (`.ics`):
 
 ```bash
-scripts/review.sh    # decrypt to a private temp dir → staleness summary →
-                     # edit → validate → confirm freshness → re-encrypt with
-                     # the SAME passphrase (shares stay valid) → verify →
-                     # clean up + calendar nudges (.ics)
+scripts/review.sh
 ```
 
 Changing the passphrase itself — holder died, share lost, suspected compromise, executor change — is `scripts/rotate-shares.sh`: new passphrase, fresh shares, and it proves the old passphrase dead before declaring success. `scripts/verify-copies.sh` confirms every stored copy of the `.age` file is the same, current one.
