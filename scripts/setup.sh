@@ -155,8 +155,9 @@ gen_passphrase() {
     done
     printf '%s' "${out#-}"
   else
-    LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 30 |
-      sed 's/.\{5\}/&-/g; s/-$//'
+    # Bounded read: head closes nothing early, so pipefail stays happy.
+    chars="$(head -c 4096 /dev/urandom | LC_ALL=C tr -dc 'a-z0-9')"
+    printf '%.30s' "$chars" | sed 's/.\{5\}/&-/g; s/-$//'
   fi
 }
 
