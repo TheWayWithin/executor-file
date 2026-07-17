@@ -34,11 +34,27 @@ jobs:
       # CI is pinned to explicit mechanisms and fully non-interactive
       # paths — an unpinned run that fell back to an interactive prompt
       # (read -rs, expect against a real tty) would hang the pipeline.
+      #
+      # The expect run goes first and uses the distro's age (1.1 on
+      # Ubuntu) — that is deliberate: it proves the executor's stock
+      # `age -d` path against the oldest age a recovery machine is
+      # likely to have. Then Ubuntu gets the official age 1.3.1 build
+      # (checksum-pinned) so the batchpass mechanism is covered on
+      # both OSes.
+      - name: Run test suite (expect mechanism, distro age)
+        run: EXECUTOR_FILE_MECH=expect tests/run-tests.sh < /dev/null
+
+      - name: Install age 1.3.1 with batchpass plugin (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          curl -sSL -o /tmp/age.tar.gz https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz
+          echo "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  /tmp/age.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/age.tar.gz -C /tmp
+          sudo install /tmp/age/age /tmp/age/age-keygen /tmp/age/age-plugin-batchpass /usr/local/bin/
+          age --version
+
       - name: Run test suite (batchpass mechanism)
         run: EXECUTOR_FILE_MECH=batchpass tests/run-tests.sh < /dev/null
-
-      - name: Run test suite (forced expect mechanism)
-        run: EXECUTOR_FILE_MECH=expect tests/run-tests.sh < /dev/null
 
       - name: Schema agreement (YAML reference vs JSON contract)
         run: python3 tests/schema-agreement.py
