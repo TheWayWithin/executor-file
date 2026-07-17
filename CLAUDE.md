@@ -70,8 +70,10 @@ All specs live in `ideation/` (moved from repo root, 17 Jul 2026):
   as ONE pattern — multi-pattern expect blocks must be written across
   multiple lines; `&` in awk gsub/sub replacements means "the match" —
   escape register-derived values before substituting them into templates;
-  never `git checkout --` a file whose only copy of new work is the
-  working tree.
+  passing an UNSET array element as a function argument crashes gawk 5.x
+  ("Node_val" internal error) though BSD awk/mawk tolerate it — force a
+  string with `"" A[...]` at call sites; never `git checkout --` a file
+  whose only copy of new work is the working tree.
 
 ## Locked decisions
 
