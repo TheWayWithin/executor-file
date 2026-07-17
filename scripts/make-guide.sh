@@ -137,9 +137,9 @@ NR == FNR {
 FNR == 1 && NR != FNR { flush_item() }
 {
     line = $0
-    gsub(/\[OWNER FULL NAME\]/, repl(meta["owner"]), line)
-    gsub(/\[LAST UPDATED\]/, repl(meta["updated"]), line)
-    gsub(/\[PASSWORD MANAGER\]/, repl(meta["password_manager"]), line)
+    gsub(/\[OWNER FULL NAME\]/, repl("" meta["owner"]), line)
+    gsub(/\[LAST UPDATED\]/, repl("" meta["updated"]), line)
+    gsub(/\[PASSWORD MANAGER\]/, repl("" meta["password_manager"]), line)
     gsub(/\[LAST RECOVERY TEST\]/, repl(last_test), line)
     gsub(/\[REPO URL\]/, repl(repo_url), line)
     if (nsh >= 1) gsub(/\[SHARE HOLDER 1\]/, repl(sh[1]), line)

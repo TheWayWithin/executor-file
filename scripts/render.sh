@@ -160,14 +160,17 @@ function action_text(n,   a, t) {
     return t
 }
 function emit(n) {
+    # NOTE: array elements are passed as ("" A[...]) — forcing a string —
+    # because handing an UNSET element straight to a function crashes
+    # gawk 5.x with "unexpected parameter type Node_val".
     OPEN_ENTRY()
     LINE1(headline(n))
-    SUB("First", A[n, "first_step"])
+    SUB("First", "" A[n, "first_step"])
     SUB("Order", dep_line(n))
     SUB("What I want done", action_text(n))
-    if (A[n, "billing_cycle"] != "") SUB("Bills", A[n, "billing_cycle"])
-    SUB("Notes", A[n, "action_notes"])
-    SUB("Where the login lives", A[n, "access_pointer"])
+    if (A[n, "billing_cycle"] != "") SUB("Bills", "" A[n, "billing_cycle"])
+    SUB("Notes", "" A[n, "action_notes"])
+    SUB("Where the login lives", "" A[n, "access_pointer"])
     if (is_stale(n)) {
         lc = A[n, "last_confirmed"]
         SUB("Freshness", (lc == "" || lc == "unknown") ? "never confirmed — verify this entry still exists before spending time on it" : "last confirmed " lc " — old; verify before spending time on it")
@@ -360,7 +363,7 @@ END {
             s = I["platform_legacy_tools", i, "platform"] " — " I["platform_legacy_tools", i, "tool"]
             s = s ((conf == "true") ? ": configured" : ": NOT CONFIGURED")
             LINE1(s)
-            SUB("Named contact", I["platform_legacy_tools", i, "contact"])
+            SUB("Named contact", "" I["platform_legacy_tools", i, "contact"])
             CLOSE_ENTRY()
         }
     }
@@ -371,8 +374,8 @@ END {
         for (i = 1; i <= item_n["contacts"]; i++) {
             OPEN_ENTRY()
             LINE1(I["contacts", i, "name"] " (" I["contacts", i, "role"] ")")
-            SUB("Reach", I["contacts", i, "pointer"])
-            SUB("Note", I["contacts", i, "note"])
+            SUB("Reach", "" I["contacts", i, "pointer"])
+            SUB("Note", "" I["contacts", i, "note"])
             CLOSE_ENTRY()
         }
     }
@@ -381,7 +384,7 @@ END {
         for (i = 1; i <= item_n["documents"]; i++) {
             OPEN_ENTRY()
             LINE1(I["documents", i, "name"] " — " I["documents", i, "location"])
-            SUB("Note", I["documents", i, "note"])
+            SUB("Note", "" I["documents", i, "note"])
             CLOSE_ENTRY()
         }
     }
