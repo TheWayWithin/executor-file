@@ -153,23 +153,58 @@ echo "Freshness before this review:"
 staleness_report "$PLAIN" summary
 echo
 
-# ── edit + validate loop ────────────────────────────────────────────
-# $VISUAL wins over $EDITOR (the long-standing Unix convention); values
-# with arguments ("code --wait") work; unset falls back to nano (vi if
-# nano is missing) with a clear message.
-EDITOR_CMD="${VISUAL:-${EDITOR:-}}"
-if [ -z "$EDITOR_CMD" ]; then
-  if command -v nano >/dev/null 2>&1; then EDITOR_CMD="nano"; else EDITOR_CMD="vi"; fi
-  echo "(\$VISUAL and \$EDITOR are unset — opening $EDITOR_CMD. To use your"
-  echo " own editor next time: export EDITOR='code --wait' or similar.)"
+# ── choose the editing surface ──────────────────────────────────────
+# browser: the friendly form editor (web/editor.html via edit-server.py),
+#   the humane default for a non-technical owner on an interactive machine.
+# terminal: $VISUAL/$EDITOR (or nano/vi), for anyone who has set an editor
+#   or is running non-interactively (scripts, CI).
+# Force either with EXECUTOR_FILE_EDIT=browser|terminal. We respect an
+# explicit $VISUAL/$EDITOR so power users keep their editor.
+EDIT_SERVER="$SCRIPT_DIR/../web/edit-server.py"
+EDIT_MODE="${EXECUTOR_FILE_EDIT:-}"
+if [ -z "$EDIT_MODE" ]; then
+  if [ -n "${VISUAL:-}${EDITOR:-}" ]; then
+    EDIT_MODE=terminal
+  elif [ -t 1 ] && command -v python3 >/dev/null 2>&1 && [ -f "$EDIT_SERVER" ]; then
+    EDIT_MODE=browser
+  else
+    EDIT_MODE=terminal
+  fi
 fi
+
+if [ "$EDIT_MODE" = terminal ]; then
+  # $VISUAL wins over $EDITOR; values with arguments ("code --wait") work;
+  # unset falls back to nano (vi if nano is missing) with a clear message.
+  EDITOR_CMD="${VISUAL:-${EDITOR:-}}"
+  if [ -z "$EDITOR_CMD" ]; then
+    if command -v nano >/dev/null 2>&1; then EDITOR_CMD="nano"; else EDITOR_CMD="vi"; fi
+    echo "(\$VISUAL and \$EDITOR are unset — opening $EDITOR_CMD. To edit in"
+    echo " your browser instead next time: EXECUTOR_FILE_EDIT=browser scripts/review.sh)"
+  fi
+fi
+
+# ── edit + validate loop ────────────────────────────────────────────
 while :; do
-  sh -c "$EDITOR_CMD \"\$1\"" sh "$PLAIN"
+  if [ "$EDIT_MODE" = browser ]; then
+    echo "Opening your register in the browser editor (it runs only on this"
+    echo "machine; nothing is sent anywhere). Edit, then click 'Save and finish'."
+    python3 "$EDIT_SERVER" "$PLAIN" --open
+    rc=$?
+    if [ "$rc" -eq 2 ]; then
+      echo "Review cancelled in the editor — $IN was not changed." >&2
+      exit 1
+    elif [ "$rc" -ne 0 ]; then
+      echo "The editor closed without saving (or timed out) — $IN was not changed." >&2
+      exit 1
+    fi
+  else
+    sh -c "$EDITOR_CMD \"\$1\"" sh "$PLAIN"
+  fi
   if "$SCRIPT_DIR/validate.sh" "$PLAIN"; then
     break
   fi
   echo
-  printf 'Validation failed. Press Enter to reopen the editor and fix it (Ctrl-C aborts; %s stays untouched): ' "$IN"
+  printf 'Validation failed (see above). Press Enter to reopen the editor and fix it (Ctrl-C aborts; %s stays untouched): ' "$IN"
   read -r _
 done
 echo

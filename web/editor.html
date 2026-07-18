@@ -107,9 +107,10 @@
 </div>
 
 <div class="bar">
-  <button onclick="loadFile()">Open an existing estate.yaml</button>
+  <button id="btnOpen" onclick="loadFile()">Open an existing estate.yaml</button>
   <input id="file" type="file" accept=".yaml,.yml" style="display:none" onchange="onFile(event)">
-  <button class="primary" onclick="save()">Save estate.yaml</button>
+  <button id="btnCancel" onclick="cancelReview()" style="display:none">Cancel</button>
+  <button class="primary" id="btnSave" onclick="save()">Save estate.yaml</button>
 </div>
 <div id="msg"></div>
 
@@ -307,6 +308,11 @@ function clientCheck() {
   return problems;
 }
 
+// Server mode: when review.sh serves this page over http, Save writes
+// straight back to the file being reviewed (and the "next steps" panel
+// about Downloads/setup.sh does not apply — review.sh re-encrypts).
+const SERVER = location.protocol === "http:" || location.protocol === "https:";
+
 function save() {
   const msg = document.getElementById("msg");
   const problems = clientCheck();
@@ -316,6 +322,18 @@ function save() {
     return;
   }
   const yaml = buildYAML();
+  if (SERVER) {
+    fetch("/save", {method:"POST", headers:{"Content-Type":"text/plain"}, body:yaml})
+      .then(r => { if (!r.ok) throw new Error("save failed"); })
+      .then(() => {
+        msg.className = "ok";
+        msg.textContent = "Saved. Return to your Terminal — your file is being re-encrypted. You can close this tab.";
+        document.getElementById("btnSave").disabled = true;
+        document.getElementById("btnCancel").disabled = true;
+      })
+      .catch(e => { msg.className="err"; msg.textContent = "Could not save: " + e.message; });
+    return;
+  }
   const blob = new Blob([yaml], {type:"text/yaml"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -326,6 +344,14 @@ function save() {
   msg.textContent = "Saved estate.yaml to your Downloads folder.";
   document.getElementById("next").style.display = "block";
   document.getElementById("next").scrollIntoView({behavior:"smooth"});
+}
+function cancelReview() {
+  const msg = document.getElementById("msg");
+  fetch("/cancel", {method:"POST"}).catch(()=>{});
+  msg.className = "ok";
+  msg.textContent = "Cancelled. Your file was not changed. Return to your Terminal; you can close this tab.";
+  document.getElementById("btnSave").disabled = true;
+  document.getElementById("btnCancel").disabled = true;
 }
 
 // ---- best-effort loader for our own emitted format ----
@@ -338,24 +364,49 @@ function onFile(e) {
 }
 function unq(v) { v=v.trim(); if (v.startsWith("'")&&v.endsWith("'")) return v.slice(1,-1).replace(/''/g,"'"); if (v.startsWith('"')&&v.endsWith('"')) return v.slice(1,-1); return v; }
 function parseFlow(v) { v=v.trim(); if(v.startsWith("[")) v=v.slice(1,-1); return v.split(",").map(s=>s.trim()).filter(Boolean); }
+// If val opens a block scalar (> folded or | literal, with optional chomp),
+// swallow the following more-indented lines and join them. Returns {val, i}
+// with i advanced to the last consumed line.
+function consumeValue(val, lines, i, contIndent) {
+  const bs = val.match(/^([>|])[-+]?\s*$/);
+  if (!bs) return { val, i };
+  const folded = bs[1] === ">";
+  const parts = [];
+  let j = i + 1;
+  for (; j < lines.length; j++) {
+    const l = lines[j];
+    if (!l.trim()) { parts.push(""); continue; }
+    const indent = l.length - l.replace(/^\s+/, "").length;
+    if (indent >= contIndent) parts.push(l.slice(contIndent)); else break;
+  }
+  while (parts.length && parts[parts.length-1] === "") parts.pop();
+  const joined = folded ? parts.join(" ").replace(/\s+/g, " ").trim() : parts.join("\n");
+  return { val: joined, i: j - 1 };
+}
 function parseYAML(text) {
-  const doc = {meta:{}, assets:[], contacts:[], documents:[]};
-  let section=null, cur=null;
-  text.split(/\r?\n/).forEach(line => {
-    if (!line.trim() || line.trim().startsWith("#")) return;
-    let m;
-    if (/^[a-z_]+:/.test(line)) { section = line.split(":")[0]; cur=null; return; }
-    if (section==="meta" && (m=line.match(/^\s{2}([a-z_]+):\s*(.*)$/))) {
-      doc.meta[m[1]] = m[1]==="jurisdictions" ? parseFlow(m[2]) : unq(m[2]); return;
-    }
+  const doc = {meta:{}, assets:[], contacts:[], documents:[], platform_legacy_tools:[]};
+  const lines = text.split(/\r?\n/);
+  let section=null, cur=null, m;
+  for (let i=0; i<lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+    if (/^[a-zA-Z_]+:/.test(line) && !/^\s/.test(line)) { section = line.split(":")[0].trim(); cur=null; continue; }
     if (m = line.match(/^\s{2}-\s+([a-z_]+):\s*(.*)$/)) {
       cur = {}; (doc[section]=doc[section]||[]).push(cur);
-      cur[m[1]] = m[1]==="depends_on" ? parseFlow(m[2]) : unq(m[2]); return;
+      const r = consumeValue(m[2], lines, i, 6); i = r.i;
+      cur[m[1]] = m[1]==="depends_on"||m[1]==="jurisdictions" ? parseFlow(r.val) : unq(r.val);
+      continue;
+    }
+    if (section==="meta" && (m=line.match(/^\s{2}([a-z_]+):\s*(.*)$/))) {
+      const r = consumeValue(m[2], lines, i, 4); i = r.i;
+      doc.meta[m[1]] = m[1]==="jurisdictions" ? parseFlow(r.val) : unq(r.val);
+      continue;
     }
     if (cur && (m=line.match(/^\s{4}([a-z_]+):\s*(.*)$/))) {
-      cur[m[1]] = m[1]==="depends_on" ? parseFlow(m[2]) : unq(m[2]);
+      const r = consumeValue(m[2], lines, i, 6); i = r.i;
+      cur[m[1]] = m[1]==="depends_on" ? parseFlow(r.val) : unq(r.val);
     }
-  });
+  }
   return doc;
 }
 function populate(doc) {
@@ -376,7 +427,20 @@ function populate(doc) {
 
 // init
 document.getElementById("m_updated").value = todayISO();
-addAsset();
+if (SERVER) {
+  // review.sh mode: retitle, swap the buttons, load the file being reviewed.
+  document.querySelector("h1").textContent = "Your Executor File — annual review";
+  document.querySelector(".lede").innerHTML = "Update anything that changed, then click <strong>Save and finish</strong>. Your file is re-encrypted automatically with the same passphrase, so your holders' shares stay valid.";
+  document.getElementById("btnOpen").style.display = "none";
+  document.getElementById("btnCancel").style.display = "";
+  document.getElementById("btnSave").textContent = "Save and finish";
+  fetch("/load").then(r => r.text()).then(t => {
+    if (t && t.trim()) { populate(parseYAML(t)); document.getElementById("msg").className="ok"; document.getElementById("msg").textContent="Loaded your current register. Edit and Save and finish when ready."; }
+    else addAsset();
+  }).catch(() => addAsset());
+} else {
+  addAsset();
+}
 </script>
 </body>
 </html>
