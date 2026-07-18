@@ -19,7 +19,6 @@ Exit codes: 0 = saved, 2 = cancelled, 1 = error/timeout.
 
 import http.server
 import os
-import socket
 import sys
 import threading
 import webbrowser
@@ -111,6 +110,7 @@ def main() -> int:
         sys.stderr.write("error: could not bind a local port.\n")
         return 1
 
+    port = httpd.server_address[1]  # the actual bound port (handles --port 0)
     url = f"http://127.0.0.1:{port}/"
     sys.stderr.write(f"Register editor ready at {url}\n")
     sys.stderr.flush()

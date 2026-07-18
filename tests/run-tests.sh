@@ -355,33 +355,14 @@ SHEET_DIR="$(sed -n 's|^  \(.*\)/share-1\.html$|\1|p' "$SHEET_OUT" | head -1)"
 grep -q "spool" "$SHEET_OUT" && ok "printer spool warning shown" || fail "printer spool warning missing"
 
 echo "== review-in-browser: edit-server.py load/save/cancel =="
-if command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
-  ESRV="$ROOT/web/edit-server.py"
-  cp "$ROOT/examples/estate.example.yaml" "$T/srv.yaml"
-  python3 "$ESRV" "$T/srv.yaml" --port 8801 >/dev/null 2>"$T/srv.err" &
-  SPID=$!
-  ready=0; n=0; while [ "$n" -lt 20 ]; do grep -q "ready at" "$T/srv.err" 2>/dev/null && { ready=1; break; }; sleep 0.2; n=$((n+1)); done
-  [ "$ready" = 1 ] && ok "edit-server starts and reports ready" || fail "edit-server did not report ready"
-  PORT1="$(sed -n 's|.*127\.0\.0\.1:\([0-9][0-9]*\)/.*|\1|p' "$T/srv.err")"
-  curl -s "http://127.0.0.1:${PORT1}/load" 2>/dev/null | grep -q "format_version" && ok "edit-server /load returns the file" || fail "edit-server /load did not return the file"
-  printf "meta:\n  format_version: 3\n  owner: 'Rev Tester'\n  updated: 2026-07-18\n  jurisdictions: [UK]\n  password_manager: 'Bitwarden'\nassets:\n  - id: A001\n    provider: 'Bank'\n    type: cash\n    identifier: 'a/c ...9'\n    priority: high\n    ownership: sole\n    status: active\n    last_confirmed: 2026-07-18\n    preferred_action: liquidate\n    action_notes: 'Edited in review.'\n" > "$T/save-body.yaml"
-  curl -s -X POST --data-binary @"$T/save-body.yaml" "http://127.0.0.1:${PORT1}/save" >/dev/null 2>&1
-  n=0; while kill -0 "$SPID" 2>/dev/null && [ "$n" -lt 30 ]; do sleep 0.2; n=$((n+1)); done
-  if kill -0 "$SPID" 2>/dev/null; then kill "$SPID" 2>/dev/null; fail "edit-server did not exit after save"; else wait "$SPID"; check "edit-server exits 0 after save" 0 $?; fi
-  grep -q "Rev Tester" "$T/srv.yaml" && ok "edit-server wrote the saved register" || fail "edit-server did not write the saved content"
-  sh "$ROOT/scripts/validate.sh" "$T/srv.yaml" >/dev/null 2>&1 && ok "the saved register validates" || fail "saved register did not validate"
-
-  cp "$ROOT/examples/estate.example.yaml" "$T/srv2.yaml"
-  python3 "$ESRV" "$T/srv2.yaml" --port 8811 >/dev/null 2>"$T/srv2.err" &
-  SPID2=$!
-  n=0; while [ "$n" -lt 20 ]; do grep -q "ready at" "$T/srv2.err" 2>/dev/null && break; sleep 0.2; n=$((n+1)); done
-  PORT2="$(sed -n 's|.*127\.0\.0\.1:\([0-9][0-9]*\)/.*|\1|p' "$T/srv2.err")"
-  curl -s -X POST "http://127.0.0.1:${PORT2}/cancel" >/dev/null 2>&1
-  n=0; while kill -0 "$SPID2" 2>/dev/null && [ "$n" -lt 30 ]; do sleep 0.2; n=$((n+1)); done
-  if kill -0 "$SPID2" 2>/dev/null; then kill "$SPID2" 2>/dev/null; fail "edit-server did not exit after cancel"; else wait "$SPID2"; check "edit-server exits 2 after cancel" 2 $?; fi
-  cmp -s "$ROOT/examples/estate.example.yaml" "$T/srv2.yaml" && ok "cancel left the file unchanged" || fail "cancel changed the file"
+if command -v python3 >/dev/null 2>&1; then
+  if python3 "$ROOT/tests/test-edit-server.py" > "$T/es.log" 2>&1; then
+    ok "edit-server load/save(exit0)/cancel(exit2) round-trip"
+  else
+    fail "edit-server round-trip"; sed 's/^/    | /' "$T/es.log"
+  fi
 else
-  skip "edit-server test needs python3 + curl"
+  skip "edit-server test needs python3"
 fi
 
 echo "== rotate-shares.sh: full rotation, old shares dead =="
