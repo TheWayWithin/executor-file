@@ -60,9 +60,13 @@ All specs live in `ideation/` (moved from repo root, 17 Jul 2026):
   build (checksum-pinned) on Ubuntu for the batchpass run.
 - v0.2 history: commits d9b94a9 + b4725df (schema v2, two-tier validation,
   setup/review orchestration).
-- Awaiting Jamie: the two RELEASE-CHECKLIST.md gates (UAT plan:
-  docs/UAT-PLAN.md; tasks T-159..T-166). Consolidation done 17 Jul 2026:
-  `digital-estate` (Arm A) archived on GitHub with a pointer README.
+- **v0.3.0 TAGGED + RELEASED 18 Jul 2026** ahead of the two human gates,
+  by deliberate owner decision (live end-to-end testing; zero traffic).
+  Release notes state machine-verified vs pending honestly. The gates
+  (UAT plan: docs/UAT-PLAN.md; tasks T-159..T-166) remain open as
+  post-release validation blocking the "safe to recommend" claim;
+  findings → v0.3.1. Consolidation done 17 Jul 2026: `digital-estate`
+  (Arm A) archived on GitHub with a pointer README.
 - Session learnings worth keeping: `expect -` treats the first argument as a
   script file, so heredoc expect scripts must take filenames via env vars,
   not argv; `tr < /dev/urandom | head` dies with SIGPIPE (141) under

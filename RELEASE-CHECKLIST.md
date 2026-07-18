@@ -1,8 +1,14 @@
 # v0.3 "Executor Release" — release checklist
 
-Everything below the line is done, tested, and green on main. **Two
-gates remain, and both need another human.** Do not tag `v0.3.0` until
-both pass; fold every observed stumble back into the docs first.
+**Status update 2026-07-18:** `v0.3.0` was tagged and released AHEAD of
+the two human gates, by deliberate owner decision — pre-launch, zero
+traffic, and live end-to-end testing of the full pipeline (repo → tag →
+site download) is easier against the real release. The release notes
+state plainly which verification is machine-proven and which is
+pending. **The two gates below are unchanged in substance and remain
+open as post-release validation** — they now block the "safe to
+recommend to real families" claim and v0.3.1, not the tag. Findings
+fold into v0.3.1.
 
 ## Gate 1 — the Windows dry run (THE release gate)
 
@@ -41,25 +47,13 @@ re-run `scripts/make-guide.sh` and re-print so the guide carries the
 - [ ] Fire drill passed with real printed shares
 - [ ] Date + tester recorded and visible on the re-printed guide
 
-## Then tag
+## Tagged (2026-07-18)
 
-```
-git tag -a v0.3.0 -m "Executor Release — schema 3; recovery tested on Windows + paper"
-git push origin v0.3.0
-```
-
-Create the GitHub release with:
-
-- **Version:** v0.3.0 · **Schema:** format 3 (format 2 accepted with
-  migrate warnings for this version)
-- **Platforms tested:** macOS (CI + local), Ubuntu (CI), Windows 10/11
-  (manual dry run — name the date)
-- **Tool versions tested:** age 1.3.1 (batchpass) and age 1.1.x
-  (stock interactive, Ubuntu CI); ssss 0.5
-- **Checksums:** attach `shasum -a 256` of the tagged tarball
-  (`git archive --format=tar.gz -o executor-file-v0.3.0.tar.gz v0.3.0`)
-- **Migration notes:** copy the "MIGRATING FROM FORMAT 2" block from
-  `schema/estate.schema.yaml`
+`v0.3.0` is live: https://github.com/TheWayWithin/executor-file/releases/tag/v0.3.0
+— tarball + `.sha256` attached, release notes honest about the pending
+gates. When both gates pass: fold findings into the docs, release
+v0.3.1 with "Windows 10/11 (manual dry run — date)" added to platforms
+tested, and update the site.
 
 ---
 
