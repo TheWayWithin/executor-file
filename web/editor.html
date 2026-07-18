@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Executor File — register editor</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 46rem; margin: 0 auto; padding: 1.5rem 1rem 6rem;
+    line-height: 1.5; color: #16181d; background: #fafaf8;
+  }
+  @media (prefers-color-scheme: dark) { body { color: #e8e8e6; background: #16181d; } }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.15rem; margin: 1.75rem 0 .5rem; border-bottom: 1px solid #8886; padding-bottom: .25rem; }
+  .lede { color: #6b6f76; margin: 0 0 1rem; }
+  @media (prefers-color-scheme: dark) { .lede { color: #a0a4ab; } }
+  .trust { background: #e8f3ea; border: 1px solid #b7d8bd; border-radius: 8px; padding: .7rem .9rem; font-size: .9rem; }
+  @media (prefers-color-scheme: dark) { .trust { background: #16281a; border-color: #2f5636; } }
+  fieldset { border: 1px solid #8885; border-radius: 10px; padding: 1rem 1rem .4rem; margin: 0 0 1rem; }
+  legend { font-weight: 600; padding: 0 .4rem; }
+  label { display: block; font-weight: 600; margin: .6rem 0 .15rem; font-size: .92rem; }
+  .help { display: block; font-weight: 400; color: #6b6f76; font-size: .82rem; margin: 0 0 .3rem; }
+  @media (prefers-color-scheme: dark) { .help { color: #a0a4ab; } }
+  input, select, textarea {
+    width: 100%; padding: .5rem .55rem; font: inherit; font-size: .95rem;
+    border: 1px solid #8886; border-radius: 7px; background: #fff; color: inherit;
+  }
+  @media (prefers-color-scheme: dark) { input, select, textarea { background: #1f2229; } }
+  textarea { min-height: 3.2rem; resize: vertical; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .row > div { flex: 1 1 12rem; }
+  .card { border: 1px solid #8884; border-radius: 9px; padding: .4rem .9rem 1rem; margin: 0 0 1rem; position: relative; }
+  .card h3 { font-size: 1rem; margin: .7rem 0 .2rem; }
+  .chk { display: flex; align-items: center; gap: .5rem; margin: .7rem 0 0; }
+  .chk input { width: auto; }
+  .chk label { margin: 0; }
+  button { font: inherit; font-weight: 600; border-radius: 7px; border: 1px solid #8886; padding: .5rem .9rem; cursor: pointer; background: #fff; color: inherit; }
+  @media (prefers-color-scheme: dark) { button { background: #1f2229; } }
+  button.add { background: #eef1ff; border-color: #b9c2ff; }
+  @media (prefers-color-scheme: dark) { button.add { background: #1c2140; border-color: #3a4488; } }
+  button.remove { position: absolute; top: .6rem; right: .6rem; font-size: .8rem; padding: .25rem .55rem; color: #b23; border-color: #d99; background: transparent; }
+  .bar { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #8886; padding: .7rem 1rem; display: flex; gap: .6rem; justify-content: center; flex-wrap: wrap; }
+  @media (prefers-color-scheme: dark) { .bar { background: #16181d; } }
+  button.primary { background: #1b6; color: #fff; border-color: #1b6; padding: .55rem 1.4rem; }
+  #msg { text-align: center; font-size: .9rem; padding: .3rem 1rem 0; min-height: 1.2rem; }
+  #msg.err { color: #c33; } #msg.ok { color: #1a7; }
+  .next { background: #fff7e8; border: 1px solid #e6cf95; border-radius: 8px; padding: .8rem 1rem; margin: 1rem 0; display: none; }
+  @media (prefers-color-scheme: dark) { .next { background: #2a2411; border-color: #5c4f22; } }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; background: #8882; padding: .1rem .3rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<h1>Your Executor File — register editor</h1>
+<p class="lede">Fill this in like a form. When you are done, click <strong>Save estate.yaml</strong>. No terminal, no code.</p>
+
+<p class="trust"><strong>This runs entirely on your computer.</strong> Nothing you type here is sent anywhere: no internet, no account, no server. You can close this tab at any time and nothing is lost until you save. It holds pointers only, never passwords.</p>
+
+<fieldset>
+  <legend>About you</legend>
+  <label>Your full legal name
+    <span class="help">The person this register belongs to.</span>
+    <input id="m_owner" placeholder="e.g. Alex Example">
+  </label>
+  <div class="row">
+    <div><label>Legal jurisdictions
+      <span class="help">Where your estate sits, as short codes, comma separated. e.g. UK, US-NY</span>
+      <input id="m_juris" placeholder="UK, US-NY"></label></div>
+    <div><label>Last reviewed
+      <span class="help">Today's date is filled in for you.</span>
+      <input id="m_updated" type="date"></label></div>
+  </div>
+  <label>Where your passwords live
+    <span class="help">Which password manager holds your logins, and how your executor gets emergency access. A pointer, never a password. e.g. "1Password. Executor access via the printed Emergency Kit in the fireproof box."</span>
+    <textarea id="m_pm" placeholder="1Password. Executor access via the printed Emergency Kit held by ..."></textarea>
+  </label>
+  <label>Notes for your executor (optional)
+    <span class="help">Anything that helps. Leave blank if unsure.</span>
+    <textarea id="m_notes"></textarea>
+  </label>
+</fieldset>
+
+<h2>Accounts, assets and debts</h2>
+<p class="lede">One entry for anything that would surprise or cost your estate: bank accounts, pensions, investments, subscriptions, loans, crypto, domains, a business. Add as many as you need.</p>
+<div id="assets"></div>
+<button class="add" onclick="addAsset()">+ Add an account or asset</button>
+
+<h2>People to contact (optional)</h2>
+<p class="lede">Solicitor, accountant, and the people holding your key shares.</p>
+<div id="contacts"></div>
+<button class="add" onclick="addContact()">+ Add a person</button>
+
+<h2>Where documents live (optional)</h2>
+<p class="lede">Will, deeds, insurance schedules. The location only, not the contents.</p>
+<div id="documents"></div>
+<button class="add" onclick="addDocument()">+ Add a document</button>
+
+<div class="next" id="next">
+  <strong>Saved.</strong> Your <code>estate.yaml</code> downloaded to your Downloads folder. To seal it (this part still uses one Terminal command for now):
+  <ol>
+    <li>Move <code>estate.yaml</code> into your <code>executor-file</code> folder, <em>or</em> note it is in Downloads.</li>
+    <li>In Terminal, from that folder, run <code>scripts/setup.sh</code> (or <code>scripts/setup.sh ~/Downloads/estate.yaml</code>). It checks, encrypts, and splits the key, then prints your checklist.</li>
+  </ol>
+</div>
+
+<div class="bar">
+  <button onclick="loadFile()">Open an existing estate.yaml</button>
+  <input id="file" type="file" accept=".yaml,.yml" style="display:none" onchange="onFile(event)">
+  <button class="primary" onclick="save()">Save estate.yaml</button>
+</div>
+<div id="msg"></div>
+
+<script>
+const TYPES = ["cash","liability","subscription","holding","crypto","online-business","other"];
+const PRIOS = ["critical","high","normal","low"];
+const OWNS = ["sole","joint","beneficiary-designated","trust","business-owned","unknown"];
+const ACTIONS = ["liquidate","cancel","transfer","delete","notify-only","settle","preserve"];
+const CYCLES = ["","monthly","annual","one-off"];
+const ACTION_HELP = "liquidate = sell into the estate · cancel = stop a charge · transfer = give to someone · delete = close and erase · notify-only = just inform · settle = pay off a debt · preserve = keep it running";
+
+function el(tag, attrs, html) {
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (html != null) e.innerHTML = html;
+  return e;
+}
+function opts(list, sel) {
+  return list.map(v => `<option value="${v}"${v===sel?" selected":""}>${v===""?"(none)":v}</option>`).join("");
+}
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+
+let assetSeq = 0;
+function nextId() { assetSeq++; return "A" + String(assetSeq).padStart(3,"0"); }
+function renumber() {
+  document.querySelectorAll("#assets .card").forEach((c,i) => {
+    c.querySelector(".aid").textContent = "A" + String(i+1).padStart(3,"0");
+  });
+}
+
+function addAsset(data) {
+  data = data || {};
+  const card = el("div", {class:"card"});
+  const id = data.id || nextId();
+  card.innerHTML = `
+    <button class="remove" onclick="this.closest('.card').remove(); renumber()">remove</button>
+    <h3>Account / asset <span class="aid">${id}</span></h3>
+    <div class="row">
+      <div><label>Provider<span class="help">The company, as you would search for it.</span>
+        <input class="f_provider" value="${esc(data.provider)}" placeholder="e.g. HSBC UK"></label></div>
+      <div><label>What is it?<span class="help">Pick the closest.</span>
+        <select class="f_type">${opts(TYPES, data.type)}</select></label></div>
+    </div>
+    <label>Reference<span class="help">Last 4 digits or a label only. NEVER a full account number. e.g. "current a/c ...1234"</span>
+      <input class="f_identifier" value="${esc(data.identifier)}" placeholder="current a/c ...1234"></label>
+    <div class="row">
+      <div><label>Priority<span class="help">How urgent for your executor.</span>
+        <select class="f_priority">${opts(PRIOS, data.priority||"normal")}</select></label></div>
+      <div><label>How is it held?<span class="help">Ownership decides what is lawful.</span>
+        <select class="f_ownership">${opts(OWNS, data.ownership||"sole")}</select></label></div>
+      <div><label>Status<select class="f_status">${opts(["active","closed"], data.status||"active")}</select></label></div>
+    </div>
+    <div class="row">
+      <div><label>What do you want done?<span class="help">${ACTION_HELP}</span>
+        <select class="f_action">${opts(ACTIONS, data.preferred_action)}</select></label></div>
+      <div><label>Bills how often? (if a charge)<select class="f_cycle">${opts(CYCLES, data.billing_cycle||"")}</select></label></div>
+    </div>
+    <label>In your own words, what should happen<span class="help">Your executor acts on this. Name names, flag anything time-critical.</span>
+      <textarea class="f_notes">${esc(data.action_notes)}</textarea></label>
+    <div class="row">
+      <div><label>If transferring, to whom? (optional)<input class="f_beneficiary" value="${esc(data.beneficiary)}"></label></div>
+      <div><label>Where the login lives (optional)<span class="help">A signpost, never the password. e.g. "1Password &gt; HSBC"</span>
+        <input class="f_pointer" value="${esc(data.access_pointer)}"></label></div>
+    </div>
+    <label>First thing to do now (optional)<span class="help">What to do immediately, even before the final action. e.g. "Secure the device, move nothing yet."</span>
+      <input class="f_first" value="${esc(data.first_step)}"></label>
+    <div class="row">
+      <div><label>Depends on (optional)<span class="help">Other entry IDs to handle first, e.g. A006</span>
+        <input class="f_depends" value="${esc((data.depends_on||[]).join(', '))}"></label></div>
+      <div class="chk"><input type="checkbox" class="f_lcunknown" ${data.last_confirmed==='unknown'?'checked':''} onchange="toggleLC(this)"><label>I am not sure this is still current</label></div>
+    </div>
+    <label class="f_lcwrap">Last confirmed accurate<span class="help">When you last checked this entry is right.</span>
+      <input class="f_lc" type="date" value="${data.last_confirmed && data.last_confirmed!=='unknown' ? data.last_confirmed : todayISO()}"></label>
+  `;
+  document.getElementById("assets").appendChild(card);
+  const u = card.querySelector(".f_lcunknown"); if (u.checked) toggleLC(u);
+  renumber();
+}
+function toggleLC(cb) {
+  const wrap = cb.closest(".card").querySelector(".f_lcwrap");
+  wrap.style.display = cb.checked ? "none" : "block";
+}
+
+function addContact(data) {
+  data = data || {};
+  const card = el("div", {class:"card"});
+  card.innerHTML = `
+    <button class="remove" onclick="this.closest('.card').remove()">remove</button>
+    <div class="row">
+      <div><label>Their role<span class="help">e.g. solicitor, accountant, share holder</span>
+        <input class="c_role" value="${esc(data.role)}"></label></div>
+      <div><label>Name<input class="c_name" value="${esc(data.name)}"></label></div>
+    </div>
+    <div class="row">
+      <div><label>How to reach them (optional)<input class="c_pointer" value="${esc(data.pointer)}"></label></div>
+      <div><label>Note (optional)<input class="c_note" value="${esc(data.note)}"></label></div>
+    </div>`;
+  document.getElementById("contacts").appendChild(card);
+}
+function addDocument(data) {
+  data = data || {};
+  const card = el("div", {class:"card"});
+  card.innerHTML = `
+    <button class="remove" onclick="this.closest('.card').remove()">remove</button>
+    <div class="row">
+      <div><label>Document<span class="help">e.g. Will (original)</span><input class="d_name" value="${esc(data.name)}"></label></div>
+      <div><label>Where it lives<input class="d_location" value="${esc(data.location)}"></label></div>
+    </div>
+    <label>Note (optional)<input class="d_note" value="${esc(data.note)}"></label>`;
+  document.getElementById("documents").appendChild(card);
+}
+
+function esc(s) { return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;"); }
+function val(scope, cls) { const e = scope.querySelector("."+cls); return e ? e.value.trim() : ""; }
+
+// ---- YAML generation (constrained subset the tool's validators accept) ----
+function q(s) { return "'" + String(s).replace(/'/g, "''") + "'"; }
+function flow(items) { return "[" + items.join(", ") + "]"; }
+
+function buildYAML() {
+  const L = [];
+  L.push("meta:");
+  L.push("  format_version: 3");
+  L.push("  owner: " + q(gv("m_owner")));
+  L.push("  updated: " + (gv("m_updated") || todayISO()));
+  const juris = gv("m_juris").split(",").map(s=>s.trim()).filter(Boolean);
+  L.push("  jurisdictions: " + flow(juris.length ? juris : ["UK"]));
+  L.push("  password_manager: " + q(gv("m_pm")));
+  if (gv("m_notes")) L.push("  notes: " + q(gv("m_notes")));
+
+  L.push("");
+  L.push("assets:");
+  document.querySelectorAll("#assets .card").forEach((c) => {
+    const id = c.querySelector(".aid").textContent;
+    L.push("  - id: " + id);
+    L.push("    provider: " + q(val(c,"f_provider")));
+    L.push("    type: " + val(c,"f_type"));
+    L.push("    identifier: " + q(val(c,"f_identifier")));
+    L.push("    priority: " + val(c,"f_priority"));
+    L.push("    ownership: " + val(c,"f_ownership"));
+    const status = val(c,"f_status");
+    L.push("    status: " + status);
+    if (status === "active") {
+      const unknown = c.querySelector(".f_lcunknown").checked;
+      L.push("    last_confirmed: " + (unknown ? "unknown" : (val(c,"f_lc") || todayISO())));
+    }
+    const cycle = val(c,"f_cycle"); if (cycle) L.push("    billing_cycle: " + cycle);
+    L.push("    preferred_action: " + val(c,"f_action"));
+    const first = val(c,"f_first"); if (first) L.push("    first_step: " + q(first));
+    const dep = val(c,"f_depends").split(",").map(s=>s.trim()).filter(Boolean);
+    if (dep.length) L.push("    depends_on: " + flow(dep));
+    const ben = val(c,"f_beneficiary"); if (ben) L.push("    beneficiary: " + q(ben));
+    L.push("    action_notes: " + q(val(c,"f_notes")));
+    const ptr = val(c,"f_pointer"); if (ptr) L.push("    access_pointer: " + q(ptr));
+  });
+
+  const contacts = [...document.querySelectorAll("#contacts .card")];
+  if (contacts.length) {
+    L.push(""); L.push("contacts:");
+    contacts.forEach(c => {
+      L.push("  - role: " + q(val(c,"c_role")));
+      L.push("    name: " + q(val(c,"c_name")));
+      if (val(c,"c_pointer")) L.push("    pointer: " + q(val(c,"c_pointer")));
+      if (val(c,"c_note")) L.push("    note: " + q(val(c,"c_note")));
+    });
+  }
+  const docs = [...document.querySelectorAll("#documents .card")];
+  if (docs.length) {
+    L.push(""); L.push("documents:");
+    docs.forEach(c => {
+      L.push("  - name: " + q(val(c,"d_name")));
+      L.push("    location: " + q(val(c,"d_location")));
+      if (val(c,"d_note")) L.push("    note: " + q(val(c,"d_note")));
+    });
+  }
+  return L.join("\n") + "\n";
+}
+function gv(id) { return document.getElementById(id).value.trim(); }
+
+function clientCheck() {
+  const problems = [];
+  if (!gv("m_owner")) problems.push("your name");
+  if (!gv("m_pm")) problems.push("where your passwords live");
+  if (!document.querySelector("#assets .card")) problems.push("at least one account or asset");
+  document.querySelectorAll("#assets .card").forEach(c => {
+    const id = c.querySelector(".aid").textContent;
+    if (!val(c,"f_provider")) problems.push(id + ": provider");
+    if (!val(c,"f_identifier")) problems.push(id + ": reference");
+    if (!val(c,"f_action")) problems.push(id + ": what you want done");
+    if (!val(c,"f_notes")) problems.push(id + ": what should happen");
+  });
+  return problems;
+}
+
+function save() {
+  const msg = document.getElementById("msg");
+  const problems = clientCheck();
+  if (problems.length) {
+    msg.className = "err";
+    msg.textContent = "Still needed: " + problems.slice(0,4).join("; ") + (problems.length>4 ? " (and more)" : "");
+    return;
+  }
+  const yaml = buildYAML();
+  const blob = new Blob([yaml], {type:"text/yaml"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "estate.yaml";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  msg.className = "ok";
+  msg.textContent = "Saved estate.yaml to your Downloads folder.";
+  document.getElementById("next").style.display = "block";
+  document.getElementById("next").scrollIntoView({behavior:"smooth"});
+}
+
+// ---- best-effort loader for our own emitted format ----
+function loadFile() { document.getElementById("file").click(); }
+function onFile(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { try { populate(parseYAML(r.result)); document.getElementById("msg").className="ok"; document.getElementById("msg").textContent="Loaded. Edit and Save when ready."; } catch(err) { document.getElementById("msg").className="err"; document.getElementById("msg").textContent="Could not read that file: "+err.message; } };
+  r.readAsText(f);
+}
+function unq(v) { v=v.trim(); if (v.startsWith("'")&&v.endsWith("'")) return v.slice(1,-1).replace(/''/g,"'"); if (v.startsWith('"')&&v.endsWith('"')) return v.slice(1,-1); return v; }
+function parseFlow(v) { v=v.trim(); if(v.startsWith("[")) v=v.slice(1,-1); return v.split(",").map(s=>s.trim()).filter(Boolean); }
+function parseYAML(text) {
+  const doc = {meta:{}, assets:[], contacts:[], documents:[]};
+  let section=null, cur=null;
+  text.split(/\r?\n/).forEach(line => {
+    if (!line.trim() || line.trim().startsWith("#")) return;
+    let m;
+    if (/^[a-z_]+:/.test(line)) { section = line.split(":")[0]; cur=null; return; }
+    if (section==="meta" && (m=line.match(/^\s{2}([a-z_]+):\s*(.*)$/))) {
+      doc.meta[m[1]] = m[1]==="jurisdictions" ? parseFlow(m[2]) : unq(m[2]); return;
+    }
+    if (m = line.match(/^\s{2}-\s+([a-z_]+):\s*(.*)$/)) {
+      cur = {}; (doc[section]=doc[section]||[]).push(cur);
+      cur[m[1]] = m[1]==="depends_on" ? parseFlow(m[2]) : unq(m[2]); return;
+    }
+    if (cur && (m=line.match(/^\s{4}([a-z_]+):\s*(.*)$/))) {
+      cur[m[1]] = m[1]==="depends_on" ? parseFlow(m[2]) : unq(m[2]);
+    }
+  });
+  return doc;
+}
+function populate(doc) {
+  document.getElementById("assets").innerHTML="";
+  document.getElementById("contacts").innerHTML="";
+  document.getElementById("documents").innerHTML="";
+  assetSeq = 0;
+  const m = doc.meta||{};
+  document.getElementById("m_owner").value = m.owner||"";
+  document.getElementById("m_juris").value = (m.jurisdictions||[]).join(", ");
+  document.getElementById("m_updated").value = m.updated||todayISO();
+  document.getElementById("m_pm").value = m.password_manager||"";
+  document.getElementById("m_notes").value = m.notes||"";
+  (doc.assets||[]).forEach(addAsset);
+  (doc.contacts||[]).forEach(addContact);
+  (doc.documents||[]).forEach(addDocument);
+}
+
+// init
+document.getElementById("m_updated").value = todayISO();
+addAsset();
+</script>
+</body>
+</html>

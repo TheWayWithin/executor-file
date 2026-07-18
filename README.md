@@ -58,6 +58,8 @@ cd executor-file
 
 Either way you are now "in the folder" — every command below is typed into that same Terminal window, and the `scripts/...` paths will just work.
 
+**Prefer not to hand-edit a text file?** Double-click **`Edit-Executor-File.command`** in the folder (or run `scripts/edit.sh`) to fill your register in as a form in your browser — dropdowns, plain-English help, no YAML. It runs entirely on your machine, saves `estate.yaml` to your Downloads, and you still seal it once with `scripts/setup.sh`.
+
 **Two small tools to install once** (these do the encryption and the share-splitting; both are free, open-source, and standard):
 
 ```bash
