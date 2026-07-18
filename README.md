@@ -237,3 +237,5 @@ No credential storage (that's your password manager's job). No provider APIs, ge
 ## License
 
 [MIT](LICENSE). Copyright © 2026 Jamie Watters.
+
+Free forever — no paid tier, and there never will be one (a tool like this must not depend on anyone's subscription). If it earns its keep for your family, you can [buy me a coffee](https://buymeacoffee.com/jamiewatters).
