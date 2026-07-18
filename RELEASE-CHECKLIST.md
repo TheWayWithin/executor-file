@@ -53,7 +53,8 @@ re-run `scripts/make-guide.sh` and re-print so the guide carries the
 — tarball + `.sha256` attached, release notes honest about the pending
 gates. When both gates pass: fold findings into the docs, release
 v0.3.1 with "Windows 10/11 (manual dry run — date)" added to platforms
-tested, and update the site.
+tested, bump the tarball filename in README's "Get the tool" section,
+and update the site.
 
 ---
 

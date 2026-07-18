@@ -9,6 +9,8 @@ Two artefacts carry everything:
 - **Your Executor File** — the encrypted register (`estate.yaml.age`).
 - **The Executor Instructions** — one printed page, stored with the will, that tells your executor how to open it.
 
+**New here and ready to try it? Jump straight to [Get the tool](#get-the-tool-2-minutes).**
+
 ## The promises this design keeps
 
 A security-literate reader should be able to verify each of these directly from this repo:
@@ -33,9 +35,40 @@ On death, the executor reads the printed Executor Instructions, collects shares 
 
 **Your own way back in is simpler:** the passphrase lives in your password manager, like every other credential you own. The shares exist so your *executor* can get in without you; they are not your access path. At review time you type the passphrase, not collect shares.
 
-## Quickstart (you, the owner)
+## Get the tool (2 minutes)
 
-Requirements: `age` (≥ 1.3 recommended) and `ssss` — `brew install age ssss` on macOS, `sudo apt install age ssss` on Debian/Ubuntu.
+There is nothing to install for the tool itself — it is a folder of small scripts you run in place. You need it on your machine one of two ways:
+
+**Option A — download (no git, no GitHub account needed):**
+
+1. Go to the [latest release](https://github.com/TheWayWithin/executor-file/releases/latest) and download **`executor-file-v0.3.0.tar.gz`** (under "Assets").
+2. Double-click the downloaded file — macOS unpacks it into a folder called `executor-file-v0.3.0`.
+3. Open the **Terminal** app (press ⌘–space, type `Terminal`, press Enter) and type:
+
+```bash
+cd ~/Downloads/executor-file-v0.3.0
+```
+
+**Option B — clone with git** (if you know you have git):
+
+```bash
+git clone https://github.com/TheWayWithin/executor-file.git
+cd executor-file
+```
+
+Either way you are now "in the folder" — every command below is typed into that same Terminal window, and the `scripts/...` paths will just work.
+
+**Two small tools to install once** (these do the encryption and the share-splitting; both are free, open-source, and standard):
+
+```bash
+brew install age ssss
+```
+
+(If Terminal says `brew` is not found, install Homebrew first from [brew.sh](https://brew.sh) — one copy-paste command — then run the line above again. On Ubuntu/Debian Linux it's `sudo apt install age ssss` instead.)
+
+**On Windows?** The owner-side tooling is built for macOS and Linux. Windows works via Microsoft's built-in WSL feature — install it with `wsl --install` in an administrator PowerShell, then follow the Linux instructions inside Ubuntu. (Executor-side recovery on Windows has its own printed sheet: [`docs/WINDOWS-RECOVERY.md`](docs/WINDOWS-RECOVERY.md).)
+
+## Quickstart (you, the owner)
 
 One command per step — several are interactive, so run each and read what it says before moving on.
 
