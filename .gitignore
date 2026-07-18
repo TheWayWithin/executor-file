@@ -33,3 +33,7 @@ recovery-tests.log
 
 # OS noise
 .DS_Store
+
+# Python bytecode (from running owner-side scripts)
+__pycache__/
+*.pyc
