@@ -310,6 +310,26 @@ else
 fi
 FINALISED=1
 
+# Machine-emit mode (EXECUTOR_FILE_EMIT=1): a caller that will run its
+# own ceremony (scripts/edit.sh's browser seal, via web/edit-server.py)
+# asks for the secrets in a parseable block instead of the human display.
+# The block goes to stdout between clear markers; nothing is written to
+# disk beyond the .age and its sidecar. We still did the full proof
+# chain above, so this is the same sealed, verified file.
+if [ -n "${EXECUTOR_FILE_EMIT:-}" ]; then
+  SHA="$(cut -d' ' -f1 < "$OUT.sha256")"
+  printf '===SEAL-BEGIN===\n'
+  printf 'passphrase\t%s\n' "$PASS"
+  printf 'share\t%s\n' "$S1"
+  printf 'share\t%s\n' "$S2"
+  printf 'share\t%s\n' "$S3"
+  printf 'sha256\t%s\n' "$SHA"
+  printf 'out\t%s\n' "$OUT"
+  printf 'own\t%s\n' "$OWN"
+  printf '===SEAL-END===\n'
+  exit 0
+fi
+
 echo "Step 6/6 — done. Your Executor File is sealed."
 echo
 echo "  Encrypted register:  $OUT"

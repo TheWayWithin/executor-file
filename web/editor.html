@@ -50,6 +50,13 @@
   .next { background: #fff7e8; border: 1px solid #e6cf95; border-radius: 8px; padding: .8rem 1rem; margin: 1rem 0; display: none; }
   @media (prefers-color-scheme: dark) { .next { background: #2a2411; border-color: #5c4f22; } }
   code { font-family: ui-monospace, Menlo, Consolas, monospace; background: #8882; padding: .1rem .3rem; border-radius: 4px; }
+  #ceremony { position: fixed; inset: 0; background: #fafaf8; overflow-y: auto; padding: 2rem 1rem 4rem; z-index: 50; }
+  @media (prefers-color-scheme: dark) { #ceremony { background: #16181d; } }
+  .cer-inner { max-width: 40rem; margin: 0 auto; }
+  .cer-body h2 { border: none; margin-top: 0; }
+  .secret { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.05rem; letter-spacing: .04em; word-break: break-all; background: #fff; border: 2px solid #111; border-radius: 8px; padding: 1rem; margin: 1.2rem 0; }
+  @media (prefers-color-scheme: dark) { .secret { background: #1f2229; border-color: #e8e8e6; } }
+  #ceremony .primary { background: #1b6; color: #fff; border-color: #1b6; padding: .6rem 1.4rem; margin-top: .5rem; }
 </style>
 </head>
 <body>
@@ -111,7 +118,9 @@
   <input id="file" type="file" accept=".yaml,.yml" style="display:none" onchange="onFile(event)">
   <button id="btnCancel" onclick="cancelReview()" style="display:none">Cancel</button>
   <button class="primary" id="btnSave" onclick="save()">Save estate.yaml</button>
+  <button class="primary" id="btnSeal" onclick="sealNow()" style="display:none">Seal my file</button>
 </div>
+<div id="ceremony"><div class="cer-inner"><div class="cer-body"></div></div></div>
 <div id="msg"></div>
 
 <script>
@@ -312,6 +321,8 @@ function clientCheck() {
 // straight back to the file being reviewed (and the "next steps" panel
 // about Downloads/setup.sh does not apply — review.sh re-encrypts).
 const SERVER = location.protocol === "http:" || location.protocol === "https:";
+const EF_MODE = "__MODE__";  // the server injects "create" or "review"; file:// leaves it literal
+const CREATE = SERVER && EF_MODE === "create";
 
 function save() {
   const msg = document.getElementById("msg");
@@ -327,9 +338,14 @@ function save() {
       .then(r => { if (!r.ok) throw new Error("save failed"); })
       .then(() => {
         msg.className = "ok";
-        msg.textContent = "Saved. Return to your Terminal — your file is being re-encrypted. You can close this tab.";
-        document.getElementById("btnSave").disabled = true;
-        document.getElementById("btnCancel").disabled = true;
+        if (CREATE) {
+          msg.textContent = "Saved. Now click ‘Seal my file’ to encrypt it and split the key.";
+          document.getElementById("btnSeal").style.display = "";
+        } else {
+          msg.textContent = "Saved. Return to your Terminal — your file is being re-encrypted. You can close this tab.";
+          document.getElementById("btnSave").disabled = true;
+          document.getElementById("btnCancel").disabled = true;
+        }
       })
       .catch(e => { msg.className="err"; msg.textContent = "Could not save: " + e.message; });
     return;
@@ -352,6 +368,78 @@ function cancelReview() {
   msg.textContent = "Cancelled. Your file was not changed. Return to your Terminal; you can close this tab.";
   document.getElementById("btnSave").disabled = true;
   document.getElementById("btnCancel").disabled = true;
+}
+
+// Create mode: seal the saved register (the local server runs setup.sh),
+// then run the ceremony in the browser. Secrets stay on this machine and
+// are shown one at a time, never stored.
+function sealNow(overwrite) {
+  const msg = document.getElementById("msg");
+  msg.className = "ok";
+  msg.textContent = "Sealing your file… this takes a few seconds.";
+  document.getElementById("btnSeal").disabled = true;
+  fetch("/seal", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({overwrite: !!overwrite})})
+    .then(r => r.json())
+    .then(res => {
+      document.getElementById("btnSeal").disabled = false;
+      if (!res.ok && res.error === "exists") {
+        if (confirm("An encrypted file already exists here. Re-seal it? This makes any shares you handed out useless.")) { sealNow(true); }
+        else { msg.textContent = "Sealing cancelled. Your existing file was left alone."; }
+        return;
+      }
+      if (!res.ok) { msg.className = "err"; msg.textContent = "Could not seal: " + (res.error || "unknown error"); return; }
+      runCeremony(res);
+    })
+    .catch(e => { document.getElementById("btnSeal").disabled = false; msg.className="err"; msg.textContent = "Could not seal: " + e.message; });
+}
+
+function runCeremony(res) {
+  const cer = document.getElementById("ceremony");
+  const bodyEl = cer.querySelector(".cer-body");
+  const steps = [{type:"warn"}];
+  res.shares.forEach((s, i) => steps.push({type:"share", n:i+1, val:s}));
+  if (res.own === "0") steps.push({type:"pass", val:res.passphrase});
+  steps.push({type:"done", out:res.out});
+  let idx = 0;
+  function render() {
+    const st = steps[idx];
+    let html = "";
+    if (st.type === "warn") {
+      html = "<h2>Your file is sealed. Now write down the keys.</h2>"
+        + "<p>You will now see three shares and, unless you chose your own, a passphrase, one at a time. Each appears once and is then cleared. Before you continue:</p>"
+        + "<ul><li>Make sure nobody can see your screen.</li><li>Stop any screen recording, screen sharing, or video call.</li><li>Have three sheets of paper and a pen ready.</li></ul>"
+        + "<button class=\"primary\" onclick=\"cerNext()\">Show share 1</button>";
+    } else if (st.type === "share") {
+      html = "<h2>Share " + st.n + " of 3</h2>"
+        + "<p>Copy this onto its own sheet of paper, by hand. The <code>estate-" + st.n + "-</code> start is part of it. Every character matters: the long part uses only 0-9 and a-f.</p>"
+        + "<div class=\"secret\">" + esc(st.val) + "</div>"
+        + "<button class=\"primary\" onclick=\"cerNext()\">I have written share " + st.n + " down" + (st.n < 3 ? ", show share " + (st.n+1) : "") + "</button>";
+    } else if (st.type === "pass") {
+      html = "<h2>Your passphrase</h2>"
+        + "<p>Save this in your password manager now, named \"Executor File passphrase\". It is your own way back into the file at review time. The shares are your executor's way.</p>"
+        + "<div class=\"secret\">" + esc(st.val) + "</div>"
+        + "<button class=\"primary\" onclick=\"cerNext()\">I have saved it in my password manager</button>";
+    } else {
+      html = "<h2>Done. Your Executor File is sealed.</h2>"
+        + "<p>The encrypted file is <code>" + esc(st.out) + "</code>, with a <code>.sha256</code> file beside it. To finish:</p>"
+        + "<ul>"
+        + "<li>Give one share to each of your three holders. Never two shares in one place, and never in a photo, email, or cloud note.</li>"
+        + "<li>Print your Executor Instructions (run <code>scripts/make-guide.sh</code>) and store the page with your will.</li>"
+        + "<li>Store the encrypted file, with its <code>.sha256</code>, in two private places.</li>"
+        + "<li>Prove the paper works: run <code>scripts/test-recovery.sh</code> with two of the printed shares.</li>"
+        + "</ul>"
+        + "<button class=\"primary\" onclick=\"cerFinish()\">Finish and close</button>";
+    }
+    bodyEl.innerHTML = html;
+    window.scrollTo(0, 0);
+  }
+  window.cerNext = function () { idx++; render(); };
+  window.cerFinish = function () {
+    fetch("/done", {method:"POST"}).catch(()=>{});
+    bodyEl.innerHTML = "<h2>You can close this tab now.</h2><p>Your file is sealed and this session is finished. Closing the tab clears these keys from the browser. Do not leave it open on a shared screen.</p>";
+  };
+  cer.style.display = "block";
+  render();
 }
 
 // ---- best-effort loader for our own emitted format ----
@@ -427,7 +515,17 @@ function populate(doc) {
 
 // init
 document.getElementById("m_updated").value = todayISO();
-if (SERVER) {
+if (CREATE) {
+  // scripts/edit.sh create flow: fill the form, Save (to the folder), then Seal.
+  document.querySelector("h1").textContent = "Create your Executor File";
+  document.querySelector(".lede").innerHTML = "Fill in your register below. When it is ready, click <strong>Save</strong>, then <strong>Seal my file</strong> to encrypt it and split the key. Everything happens on this computer; nothing is sent anywhere.";
+  document.getElementById("btnOpen").style.display = "none";
+  document.getElementById("btnSave").textContent = "Save";
+  fetch("/load").then(r => r.text()).then(t => {
+    if (t && t.trim()) { populate(parseYAML(t)); document.getElementById("msg").className="ok"; document.getElementById("msg").textContent="Picked up where you left off. Edit, Save, then Seal when ready."; }
+    else addAsset();
+  }).catch(() => addAsset());
+} else if (SERVER) {
   // review.sh mode: retitle, swap the buttons, load the file being reviewed.
   document.querySelector("h1").textContent = "Your Executor File — annual review";
   document.querySelector(".lede").innerHTML = "Update anything that changed, then click <strong>Save and finish</strong>. Your file is re-encrypted automatically with the same passphrase, so your holders' shares stay valid.";

@@ -10,6 +10,7 @@ exit 2.
 Exit 0 = all good; prints a diagnostic and exits 1 on any failure.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -54,11 +55,13 @@ def fail(msg, proc=None):
     sys.exit(1)
 
 
-def start(target):
+def start(target, mode=None):
     """Launch the server on an OS-assigned port; return (proc, base_url)."""
+    cmd = [sys.executable, SERVER, target, "--port", "0"]
+    if mode:
+        cmd += ["--mode", mode]
     proc = subprocess.Popen(
-        [sys.executable, SERVER, target, "--port", "0"],
-        stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True,
+        cmd, stderr=subprocess.PIPE, stdout=subprocess.DEVNULL, text=True,
     )
     deadline = time.time() + READY_TIMEOUT
     while time.time() < deadline:
@@ -125,6 +128,51 @@ def main():
         wait_exit(proc2, 2)
         if open(target2).read() != original:
             fail("cancel changed the file")
+
+        # ---- create + seal path (needs age + ssss) ----
+        import shutil
+        if shutil.which("age") and shutil.which("ssss-split") and shutil.which("ssss-combine"):
+            target3 = os.path.join(d, "estate3.yaml")
+            with open(EXAMPLE) as f:
+                open(target3, "w").write(f.read())
+            proc3, url3 = start(target3, mode="create")
+            # /validate reports the register as valid
+            with urllib.request.urlopen(url3 + "validate", timeout=15) as r:
+                if not json.loads(r.read()).get("ok"):
+                    fail("/validate said the example register is invalid", proc3)
+            # save keeps the server up in create mode
+            post(url3 + "save", open(target3).read())
+            if proc3.poll() is not None:
+                fail("create-mode save should NOT exit the server")
+            # seal it
+            sealed = json.loads(post(url3 + "seal", json.dumps({"overwrite": False})))
+            if not sealed.get("ok"):
+                fail(f"/seal failed: {sealed.get('error')}", proc3)
+            shares = sealed["shares"]
+            passphrase = sealed["passphrase"]
+            if len(shares) != 3:
+                fail("seal did not return three shares", proc3)
+            if not os.path.exists(target3 + ".age"):
+                fail("seal did not produce the .age file", proc3)
+            # SECURITY-CRITICAL: two of the returned shares must reconstruct
+            # the returned passphrase (the file setup.sh made was already
+            # proof-chain verified before it emitted).
+            combine = subprocess.run(
+                ["ssss-combine", "-t", "2"],
+                input=f"{shares[0]}\n{shares[1]}\n", capture_output=True, text=True,
+            )
+            recovered = ""
+            for line in combine.stderr.splitlines():
+                if line.startswith("Resulting secret: "):
+                    recovered = line[len("Resulting secret: "):]
+            if recovered != passphrase:
+                fail("the shares from /seal do NOT reconstruct the passphrase")
+            # finish
+            post(url3 + "done")
+            wait_exit(proc3, 0)
+            print("ok: create+seal produced a valid file whose shares reconstruct the passphrase")
+        else:
+            print("note: create+seal path skipped (age/ssss not installed)")
 
     print("ok: edit-server load/save(exit0)/cancel(exit2) all correct")
     return 0

@@ -18,7 +18,9 @@ Exit codes: 0 = saved, 2 = cancelled, 1 = error/timeout.
 """
 
 import http.server
+import json
 import os
+import subprocess
 import sys
 import threading
 import webbrowser
@@ -36,12 +38,16 @@ def main() -> int:
     target = os.path.abspath(args[0])
     port = 8765
     do_open = False
+    mode = "review"  # review: save then exit (review.sh re-encrypts).
+    #                  create: save keeps the server up so the owner can seal.
     i = 1
     while i < len(args):
         if args[i] == "--port" and i + 1 < len(args):
             port = int(args[i + 1]); i += 2
         elif args[i] == "--open":
             do_open = True; i += 1
+        elif args[i] == "--mode" and i + 1 < len(args):
+            mode = args[i + 1]; i += 2
         else:
             i += 1
 
@@ -49,7 +55,49 @@ def main() -> int:
         sys.stderr.write(f"error: editor not found at {EDITOR_HTML}\n")
         return 1
 
+    REPO_ROOT = os.path.dirname(HERE)
     state = {"result": None}
+
+    def run_validate():
+        p = subprocess.run(
+            ["sh", os.path.join(REPO_ROOT, "scripts", "validate.sh"), target],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True,
+        )
+        return {"ok": p.returncode == 0, "output": (p.stdout + p.stderr)[-4000:]}
+
+    def run_seal(overwrite):
+        # Seal via the proven scripts/setup.sh in machine-emit mode. Secrets
+        # come back in the response (localhost only, same trust boundary as
+        # the terminal ceremony) and are never written to disk here.
+        out = target + ".age"
+        if os.path.exists(out):
+            if not overwrite:
+                return {"ok": False, "error": "exists"}
+            os.remove(out)
+            if os.path.exists(out + ".sha256"):
+                os.remove(out + ".sha256")
+        env = dict(os.environ, EXECUTOR_FILE_EMIT="1")
+        p = subprocess.run(
+            ["sh", os.path.join(REPO_ROOT, "scripts", "setup.sh"), target],
+            stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+        )
+        if p.returncode != 0:
+            msg = (p.stderr or p.stdout or "seal failed").strip()
+            return {"ok": False, "error": msg[-800:]}
+        block, shares, inblk = {}, [], False
+        for line in p.stdout.splitlines():
+            if line == "===SEAL-BEGIN===":
+                inblk = True; continue
+            if line == "===SEAL-END===":
+                break
+            if inblk and "\t" in line:
+                k, v = line.split("\t", 1)
+                (shares.append(v) if k == "share" else block.__setitem__(k, v))
+        if len(shares) != 3 or "passphrase" not in block:
+            return {"ok": False, "error": "could not read the sealed result"}
+        return {"ok": True, "passphrase": block["passphrase"], "shares": shares,
+                "sha256": block.get("sha256", ""), "out": block.get("out", ""),
+                "own": block.get("own", "0")}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def _send(self, code, body=b"", ctype="text/plain; charset=utf-8"):
@@ -60,16 +108,26 @@ def main() -> int:
             if body:
                 self.wfile.write(body)
 
+        def _json(self, obj, code=200):
+            self._send(code, json.dumps(obj).encode(), "application/json")
+
+        def _stop(self, result):
+            state["result"] = result
+            threading.Thread(target=httpd.shutdown, daemon=True).start()
+
         def do_GET(self):
             if self.path in ("/", "/index.html", "/editor.html"):
                 with open(EDITOR_HTML, "rb") as f:
-                    self._send(200, f.read(), "text/html; charset=utf-8")
+                    body = f.read().replace(b"__MODE__", mode.encode())
+                    self._send(200, body, "text/html; charset=utf-8")
             elif self.path == "/load":
                 data = b""
                 if os.path.isfile(target):
                     with open(target, "rb") as f:
                         data = f.read()
                 self._send(200, data)
+            elif self.path == "/validate":
+                self._json(run_validate())
             else:
                 self._send(404, b"not found")
 
@@ -84,13 +142,22 @@ def main() -> int:
                     os.replace(tmp, target)
                 except OSError as e:
                     self._send(500, str(e).encode()); return
-                self._send(200, b"saved")
-                state["result"] = "saved"
-                threading.Thread(target=httpd.shutdown, daemon=True).start()
+                # In create mode the server stays up so the owner can seal;
+                # in review mode saving is the end and review.sh takes over.
+                if mode == "create":
+                    self._send(200, b"saved")
+                else:
+                    self._send(200, b"saved"); self._stop("saved")
+            elif self.path == "/seal" and mode == "create":
+                try:
+                    params = json.loads(body) if body else {}
+                except ValueError:
+                    params = {}
+                self._json(run_seal(bool(params.get("overwrite"))))
+            elif self.path == "/done":
+                self._send(200, b"done"); self._stop("saved")
             elif self.path == "/cancel":
-                self._send(200, b"cancelled")
-                state["result"] = "cancel"
-                threading.Thread(target=httpd.shutdown, daemon=True).start()
+                self._send(200, b"cancelled"); self._stop("cancel")
             else:
                 self._send(404, b"not found")
 

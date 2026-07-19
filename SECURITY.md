@@ -43,6 +43,16 @@ Explicitly NOT defended — stated so nobody relies on it:
   say so honestly: scrollback, terminal logs, and session recorders
   are outside their control — closing the terminal window is part of
   the ceremony.
+- **The optional browser flows (`scripts/edit.sh`, `scripts/review.sh`).**
+  These run a web server bound to `127.0.0.1` only, on your machine, and
+  the browser talks only to it — nothing reaches the network. But during
+  the browser seal the passphrase and shares travel over that localhost
+  connection and are shown in the browser tab, which is the same local
+  trust boundary as the terminal ceremony (same-user processes, browser
+  extensions, and a screen recorder can see them). They are never written
+  to disk beyond the `.age` file, never stored in the browser, and shown
+  one at a time; closing the tab when done is part of the ceremony. If you
+  want the smallest possible surface, use the terminal path (`setup.sh`).
 - **Two colluding share holders.** Any two shares open the file by
   design. Choose holders whose collusion you would consider
   authorised access.

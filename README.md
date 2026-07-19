@@ -58,7 +58,7 @@ cd executor-file
 
 Either way you are now "in the folder" — every command below is typed into that same Terminal window, and the `scripts/...` paths will just work.
 
-**Prefer not to hand-edit a text file?** Double-click **`Edit-Executor-File.command`** in the folder (or run `scripts/edit.sh`) to fill your register in as a form in your browser — dropdowns, plain-English help, no YAML. It runs entirely on your machine, saves `estate.yaml` to your Downloads, and you still seal it once with `scripts/setup.sh`.
+**Prefer not to touch the Terminal at all?** Run `scripts/edit.sh` (once you are in the folder) to fill your register in as a form in your browser — dropdowns, plain-English help, no YAML — then click **Save** and **Seal my file**, and it encrypts the file, splits the key, and walks you through writing the shares down, all in the browser. It runs entirely on your machine; nothing is sent anywhere. The one-command Terminal path (`scripts/setup.sh`) below still works if you prefer it.
 
 **Two small tools to install once** (these do the encryption and the share-splitting; both are free, open-source, and standard):
 
@@ -98,7 +98,7 @@ nano estate.yaml
 scripts/validate.sh
 ```
 
-**3. Seal it** — validate → encrypt → split → **prove the chain**, one command. It generates a strong passphrase, encrypts, splits the passphrase 2-of-3, then reconstructs it from two of the just-issued shares and test-decrypts back to a byte-identical copy before reporting success:
+**3. Seal it** — validate → encrypt → split → **prove the chain**. If you built the register with `scripts/edit.sh`, you already sealed it there in the browser and can skip this. Otherwise, one command does it: it generates a strong passphrase, encrypts, splits the passphrase 2-of-3, then reconstructs it from two of the just-issued shares and test-decrypts back to a byte-identical copy before reporting success:
 
 ```bash
 scripts/setup.sh
