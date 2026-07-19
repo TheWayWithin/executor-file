@@ -77,8 +77,10 @@ def main() -> int:
             if os.path.exists(out + ".sha256"):
                 os.remove(out + ".sha256")
         env = dict(os.environ, EXECUTOR_FILE_EMIT="1")
+        # setup.sh is a bash script (set -o pipefail): invoke it via its own
+        # shebang, not `sh` — Ubuntu's /bin/sh is dash and rejects pipefail.
         p = subprocess.run(
-            ["sh", os.path.join(REPO_ROOT, "scripts", "setup.sh"), target],
+            [os.path.join(REPO_ROOT, "scripts", "setup.sh"), target],
             stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
         )
         if p.returncode != 0:
