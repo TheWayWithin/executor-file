@@ -41,12 +41,12 @@ There is nothing to install for the tool itself — it is a folder of small scri
 
 **Option A — download (no git, no GitHub account needed):**
 
-1. Go to the [latest release](https://github.com/TheWayWithin/executor-file/releases/latest) and download **`executor-file-v0.3.0.tar.gz`** (under "Assets").
-2. Double-click the downloaded file — macOS unpacks it into a folder called `executor-file-v0.3.0`.
-3. Open the **Terminal** app (press ⌘–space, type `Terminal`, press Enter) and type:
+1. Go to the [latest release](https://github.com/TheWayWithin/executor-file/releases/latest) and download the file named **`executor-file-<version>.tar.gz`** (the one with a version number, under "Assets" — not GitHub's "Source code" links).
+2. Double-click the downloaded file — macOS unpacks it into a folder with the same name (for example `executor-file-v0.3.1`).
+3. Open the **Terminal** app (press ⌘–space, type `Terminal`, press Enter) and type this, replacing the version to match the folder you just unpacked:
 
 ```bash
-cd ~/Downloads/executor-file-v0.3.0
+cd ~/Downloads/executor-file-v0.3.1
 ```
 
 **Option B — clone with git** (if you know you have git):
