@@ -9,7 +9,10 @@ Two artefacts carry everything:
 - **Your Executor File** — the encrypted register (`estate.yaml.age`).
 - **The Executor Instructions** — one printed page, stored with the will, that tells your executor how to open it.
 
-**New here and ready to try it? Jump straight to [Get the tool](#get-the-tool-2-minutes).**
+> **Not a developer? Don't set this up from this page.**
+> Do the whole thing in plain English, on one page, at **[executorfile.com/get-started](https://executorfile.com/get-started)**: download, fill your file in as a browser form, and seal it, with nothing technical to hold in your head and no jumping between pages. Come back to this README only if you want to read the scripts before trusting them.
+>
+> **Comfortable in a Terminal?** The do-it-yourself path is [Get the tool](#get-the-tool-2-minutes) below.
 
 ## The promises this design keeps
 
@@ -36,6 +39,8 @@ On death, the executor reads the printed Executor Instructions, collects shares 
 **Your own way back in is simpler:** the passphrase lives in your password manager, like every other credential you own. The shares exist so your *executor* can get in without you; they are not your access path. At review time you type the passphrase, not collect shares.
 
 ## Get the tool (2 minutes)
+
+*New to the Terminal? You do not need this section: [executorfile.com/get-started](https://executorfile.com/get-started) does every step below for you, on one page. What follows is the do-it-yourself technical path.*
 
 There is nothing to install for the tool itself — it is a folder of small scripts you run in place. You need it on your machine one of two ways:
 
