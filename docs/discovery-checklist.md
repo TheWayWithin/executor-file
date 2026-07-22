@@ -60,7 +60,9 @@ This list doubles as the interview script for AI-assisted authoring (see `AGENTS
 
 ## Cross-border
 
-- **Overseas assets** — foreign accounts, property, pensions from working abroad. List every country in `meta.jurisdictions`; note per-asset `jurisdiction` where it differs.
+- **Overseas assets** — foreign accounts, property, pensions from working abroad. List every country in `meta.jurisdictions`; note per-asset `jurisdiction` where it differs. `meta.jurisdictions` means every place your estate *touches*, not only where you live.
+- **Domicile vs residence** — `meta.domicile` is the one country you treat as your permanent home (usually where you were born or intend to return to); it normally decides which law governs the estate. `meta.residence` is where you are tax-resident now, if that differs. Fill both only when they differ; leave them blank otherwise.
+- **Get advice if you span countries** — assets across several jurisdictions (say UK, US and France) can mean more than one legal system claims the estate. This file only points your executor at everything; it is not legal advice and does not settle which law applies. If your situation is cross-border, take advice from a solicitor who handles international estates.
 
 ## People and paper (the `contacts` and `documents` sections)
 

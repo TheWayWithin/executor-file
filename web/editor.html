@@ -73,13 +73,22 @@
     <input id="m_owner" placeholder="e.g. Alex Example">
   </label>
   <div class="row">
-    <div><label>Legal jurisdictions
-      <span class="help">Where your estate sits, as short codes, comma separated. e.g. UK, US-NY</span>
-      <input id="m_juris" placeholder="UK, US-NY"></label></div>
+    <div><label>Where your estate sits (jurisdictions)
+      <span class="help">Every place your estate touches: everywhere you hold an account, property, pension, or business, not only where you live. Short codes, comma separated. e.g. UK, US-NY, FR</span>
+      <input id="m_juris" placeholder="UK, US-NY, FR"></label></div>
     <div><label>Last reviewed
       <span class="help">Today's date is filled in for you.</span>
       <input id="m_updated" type="date"></label></div>
   </div>
+  <div class="row">
+    <div><label>Domicile (optional)
+      <span class="help">The one country you treat as your permanent home, usually where you were born or intend to return to. It normally decides which law governs your estate. Leave blank if it is the same as where you live. e.g. UK</span>
+      <input id="m_domicile" placeholder="e.g. UK"></label></div>
+    <div><label>Tax residence (optional)
+      <span class="help">Where you are tax-resident now, if that differs from your domicile. e.g. domiciled UK, resident US-NY.</span>
+      <input id="m_residence" placeholder="e.g. US-NY"></label></div>
+  </div>
+  <p class="help"><strong>Cross-border?</strong> Holding assets in more than one country (say UK, US and France) can mean several legal systems each have a claim on your estate. This file only points your executor at everything you own; it is not legal advice and does not settle which law applies. If your situation spans countries, take advice from a solicitor who handles international estates.</p>
   <label>Where your passwords live
     <span class="help">Which password manager holds your logins, and how your executor gets emergency access. A pointer, never a password. e.g. "1Password. Executor access via the printed Emergency Kit in the fireproof box."</span>
     <textarea id="m_pm" placeholder="1Password. Executor access via the printed Emergency Kit held by ..."></textarea>
@@ -250,6 +259,8 @@ function buildYAML() {
   L.push("  updated: " + (gv("m_updated") || todayISO()));
   const juris = gv("m_juris").split(",").map(s=>s.trim()).filter(Boolean);
   L.push("  jurisdictions: " + flow(juris.length ? juris : ["UK"]));
+  if (gv("m_domicile")) L.push("  domicile: " + q(gv("m_domicile")));
+  if (gv("m_residence")) L.push("  residence: " + q(gv("m_residence")));
   L.push("  password_manager: " + q(gv("m_pm")));
   if (gv("m_notes")) L.push("  notes: " + q(gv("m_notes")));
 
@@ -505,6 +516,8 @@ function populate(doc) {
   const m = doc.meta||{};
   document.getElementById("m_owner").value = m.owner||"";
   document.getElementById("m_juris").value = (m.jurisdictions||[]).join(", ");
+  document.getElementById("m_domicile").value = m.domicile||"";
+  document.getElementById("m_residence").value = m.residence||"";
   document.getElementById("m_updated").value = m.updated||todayISO();
   document.getElementById("m_pm").value = m.password_manager||"";
   document.getElementById("m_notes").value = m.notes||"";
