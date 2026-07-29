@@ -36,6 +36,29 @@ to collude improperly, likely to outlive you or be replaceable, reachable
 by your executor, capable of keeping one sheet of paper for years.
 Classic trio: spouse/partner, sibling or close friend, solicitor.
 
+**1Password reset + kit.age (added 2026-07-29, owner decision: no paper
+kit, no fireproof box — the product is the firebox):** during Session B,
+straight after the seal issues the passphrase:
+
+1. At my.1password.com → Manage account: **Regenerate Secret Key** (makes
+   every stray old Emergency Kit copy worthless — one leaked via an old
+   emailed spreadsheet and a second-brain upload), download the **fresh
+   Emergency Kit**, and **generate a fresh recovery code**.
+2. Seal both into a sidecar with the SAME passphrase as the register:
+   `age -p` → `kit.age`, stored beside every `estate.yaml.age` copy.
+   Delete the plaintext downloads (and empty the Trash) in the same
+   sitting.
+3. The register's `meta.password_manager` line must read to the effect
+   of: "1Password (my.1password.com). Executor access: decrypt kit.age —
+   same passphrase as this file — for the Emergency Kit and the account
+   recovery code; 2FA is on, the recovery code gets past it."
+
+Rationale: the executor already obtains the passphrase from two shares,
+so one passphrase opens both the register and the 1Password route past
+2FA; and collecting two shares becomes the owner's own last-resort
+recovery. The three Shamir shares stay on paper with the holders — that
+part has no digital substitute.
+
 ### Session B — seal and print (45–60 min)
 1. `scripts/setup.sh` — full ceremony, hand-copy the three shares (or
    `scripts/share-sheets.sh` on the home printer).
