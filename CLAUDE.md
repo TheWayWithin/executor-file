@@ -28,11 +28,38 @@ All specs live in `ideation/` (moved from repo root, 17 Jul 2026):
 4. `ideation/SPEC.md` — the original MVP control spec. Historical record;
    do not edit.
 
-## Current state (17 Jul 2026)
+## Current state (29 Jul 2026)
 
-- **v0.3 "Executor Release" BUILT** (this session; see RELEASE-CHECKLIST.md
-  for the two remaining human gates — Windows dry run + physical fire
-  drill — which block the v0.3.0 tag). Everything scriptable is on main,
+- **v0.3.2 RELEASED 22 Jul 2026** ("seal in the browser"): the whole owner
+  journey is terminal-free — edit.sh fills the form AND seals in the
+  browser (EF-ISS-7); editor gained domicile/residence + cross-border help
+  (EF-ISS-5). Site re-pinned to v0.3.2, download button live, Plausible
+  analytics registered, GitHub repo homepage set — the site launch
+  checklist is COMPLETE. All EF issues closed except EF-ISS-8.
+- **EF-ISS-8 (open, project): 1Password import.** Spec committed at
+  `ideation/1password-import-spec.md` — metadata-only `op` CLI pull, wizard
+  + bulk triage in the browser editor, dedup for review-time re-import.
+  **P0 spike DONE 29 Jul** against the real vault (findings in spec §9:
+  list output is clean of secrets; drop `additional_information`; 94% of a
+  real vault is generic Login so ranking needs the finance heuristic).
+  Owner machine ready: op 2.35.0 + 1Password 8 CLI integration on.
+- **Pickup sequence (agreed 29 Jul 2026):**
+  1. Build EF-ISS-8 **P1** — `scripts/import-1password.sh` (pull + mapper,
+     candidate JSON, stub-`op` CI tests; spec §6-7).
+  2. **P2** — editor integration: /import endpoint, vault picker, wizard
+     with filter box + bulk mode, seal-time honesty gate.
+  3. **T-159 Session A** — Jamie builds his REAL register, using the
+     import wizard as its first genuine UAT (dogfood on 563 items).
+  4. **Session B** (docs/UAT-PLAN.md) — seal + print, PLUS the 1Password
+     reset written into the plan: regenerate Secret Key, seal fresh
+     Emergency Kit + recovery code as `kit.age` under the same passphrase.
+  5. Sessions C/D — distribute shares; fire drill (**Gate 2**).
+  6. Parallel human track: T-163 recruit testers → T-164 Mac dry run →
+     T-165 Windows dry run (**Gate 1**).
+  7. After T-159 learnings: EF-ISS-8 P3 (review-time re-import) + P4
+     (docs, SECURITY.md note, CI grep guard).
+- v0.3 history (16-18 Jul): built as below, v0.3.0/v0.3.1 tagged 18 Jul
+  ahead of the two human gates by owner decision; everything scriptable
   tested under both mechanisms, CI green on macOS + Ubuntu.
 - v0.3 highlights: threshold defect verified → **2-of-3 locked** (-t/-n
   removed everywhere, loud refusal); printed SHA-256 replaced by a
