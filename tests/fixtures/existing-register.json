@@ -1,0 +1,16 @@
+{
+  "assets": [
+    {
+      "id": "A007",
+      "provider": "HSBC UK",
+      "identifier": "current a/c ...1234",
+      "access_pointer": "1Password > HSBC UK"
+    },
+    {
+      "id": "A009",
+      "provider": "Netflix",
+      "identifier": "family plan",
+      "access_pointer": "shared with the family"
+    }
+  ]
+}

@@ -4,7 +4,8 @@
 categories, and URLs only, never secrets — then triage in the browser editor,
 either one item at a time (wizard) or all at once (bulk), before sealing.
 
-Status: SPEC. Written 2026-07-28. Owner: Jamie. Register row: EF-ISS-8.
+Status: **P1 BUILT 2026-07-29** (pull + mapper + tests; findings in §11).
+P2-P4 still spec. Written 2026-07-28. Owner: Jamie. Register row: EF-ISS-8.
 
 ---
 
@@ -126,8 +127,18 @@ Every field is a *guess presented for confirmation*, pre-filled never
 auto-final in wizard mode. Other mapped fields:
 
 - `provider` ← item title
-- `identifier` ← `1Password > {title}` — the pointer style the design wants;
-  never a number, never a URL with query strings
+- `access_pointer` ← `1Password > {title}` — the pointer style the design
+  wants (and the exact example the editor already shows for this field).
+  **Corrected in P1:** the first draft of this spec put the pointer in
+  `identifier`, which is the field for a last-4 or a reference; the pointer
+  belongs in `access_pointer`, and dedup (§5) is stronger there because the
+  owner edits `identifier` (adding last-4 digits) and would break the key.
+- `identifier` ← the URL host if the item has one, else the title. A
+  searchable reference, never a number, never a path or query string.
+- `priority` ← per the table; the schema's middle value is `normal`, not
+  "medium". A finance heuristic hit (§9.5) raises it to `high`.
+- `ownership` ← `sole` (the commonest case, and a required field — the
+  wizard shows it for correction)
 - `status` ← `active`; `last_confirmed` ← today (the owner is looking at it
   right now)
 - `action_notes` ← wizard: owner-written or a sensible template; bulk: the
@@ -138,12 +149,20 @@ not the engine — see the finance-heuristic ranking consequence there.
 
 ## 5. Dedup contract
 
-- Match key: normalised `identifier` equal to `1Password > {title}`
+- Match key: normalised `access_pointer` equal to `1Password > {title}`
   (case-insensitive, whitespace-collapsed). Already-present matches are
   filtered out of the candidate list before either mode shows anything.
+  The importer also matches the key against existing `identifier` values,
+  so registers written before this feature still dedup.
 - Soft warning on near-misses: candidate title ≈ existing `provider`
   (exact match after normalisation) shows "possibly already listed as A007"
   instead of silently duplicating.
+- **Title clashes (P1 finding, §11):** two vault items can carry the same
+  title, and then they carry the same pointer — so next year's re-import
+  would hide the second one. The mapper flags those candidates with
+  `title_collisions: N`; the wizard (P2) must ask for something
+  distinguishing in `identifier` (last 4 digits) rather than silently
+  accepting twins. On a real vault this is not an edge case: 178 of 563.
 - Dedup is what makes the review-time re-import (§3) work with zero extra
   machinery.
 
@@ -151,13 +170,28 @@ not the engine — see the finance-heuristic ranking consequence there.
 
 Three small pieces, following the existing edit-server pattern:
 
-1. **`scripts/import-1password.sh`** — the pull. Checks `op` exists and is
-   signed in, runs `op item list --format=json` (plus `op vault list` for the
-   picker), maps to a manager-agnostic **candidate JSON** on stdout:
-   `{source, pulled, vaults:[...], candidates:[{title, category, url_host,
-   vault, suggested:{provider, type, identifier, priority, status,
-   last_confirmed, preferred_action, action_notes}}]}`.
-   Pure, deterministic given `op` output → trivially testable with a stub.
+1. **`scripts/import-1password.sh`** — the pull (BUILT). Checks `op` exists
+   and is signed in, runs `op vault list --format=json` for the picker and
+   `op item list --format=json` for the items, and pipes the result through
+   the mapper to stdout. Nothing touches disk: the pull is held in memory,
+   and a failed pull prints nothing rather than a truncated list. Exit
+   codes carry the failure mode: 3 = op absent, 4 = no signed-in account,
+   5 = the pull was refused, 6 = python3 missing.
+   **`scripts/map-1password.py`** — the mapping (BUILT), split out because
+   it is pure: JSON in, JSON out, no `op`, no network, so the whole mapping
+   contract is testable from a fixture. It reads exactly five fields per
+   item (title, category, urls, vault, updated_at) and drops the rest,
+   including `additional_information`.
+   The **candidate JSON** it emits:
+   `{source, pulled, vaults:[{name, items}], counts:{items, candidates,
+   shown_by_default, hidden, deduped, other_vaults}, candidates:[{title,
+   category, url_host, vault, updated, rank, default_include,
+   possible_duplicate_of?, title_collisions?, suggested:{provider, type,
+   identifier, priority, ownership, status, last_confirmed,
+   preferred_action, action_notes, access_pointer}}]}`.
+   `rank` is the money-first ordering (0-3 accounts, 4-5 non-accounts) and
+   `default_include` is the "show everything" toggle — non-accounts are
+   emitted, not withheld, so the toggle needs no second pull.
    The manager-agnostic shape is deliberate: a future Bitwarden importer
    (`bw list items`) plugs in behind the same contract (parked, not built).
 2. **`web/edit-server.py`** — one new endpoint, `GET /import/1password`
@@ -179,17 +213,22 @@ the tail skippable).
 ## 7. Build phases
 
 - **P0 — empirical spike. DONE 2026-07-29, findings in §9.**
-- **P1 — pull + mapping.** `import-1password.sh`, candidate JSON contract,
-  stub-`op` CI fixture, mapping + dedup unit tests. Drops
-  `additional_information`, adds the finance-heuristic ranker (§9).
+- **P1 — pull + mapping. DONE 2026-07-29**, findings in §11.
+  `import-1password.sh` + `map-1password.py`, candidate JSON contract,
+  stub-`op` fixture, 38 tests. Drops `additional_information`, adds the
+  finance-heuristic ranker (§9). The §2.1 grep guard landed here rather
+  than in P4: a boundary is worth more from the moment the code exists.
 - **P2 — editor integration.** Endpoint, vault picker, both modes, the
   wizard filter box (§9), seal-time honesty gate. Deterministic test via the
   existing edit-server harness with the stub `op` on PATH.
 - **P3 — review-time re-import.** Same button in review mode, dedup against
   the decrypted register, "new since last pull" framing.
-- **P4 — docs + guards.** README + site get-started ("have 1Password? two
-  minutes instead of twenty"), SECURITY.md boundary note (§2), AGENTS.md
-  line, CI grep test that `--reveal`/concealed-field reads appear nowhere.
+- **P4 — docs.** README + site get-started ("have 1Password? two minutes
+  instead of twenty"), SECURITY.md boundary note (§2), AGENTS.md line, and
+  the 1Password 8 + CLI-integration prerequisite (§9.7). The CI grep guard
+  it used to own shipped with P1. Docs must state the boundary in plain
+  English **without quoting the forbidden flags** — the guard is a literal
+  grep, and it should stay dumb enough that nothing can talk it round.
 
 Rough size: comparable to the browser-seal build (EF-ISS-7) — a day of
 sessions.
@@ -255,3 +294,36 @@ category as a hint; P2's wizard gains the filter box.
 - Other password managers (Bitwarden etc.) — the candidate JSON contract is
   designed for them, but none are built now.
 - Windows-native `op` flows (owner tooling is macOS/Linux/WSL, as today).
+
+## 11. P1 build findings (2026-07-29)
+
+Built `scripts/import-1password.sh` + `scripts/map-1password.py`, a stub
+`op` (`tests/stub-op/op`) with fixtures, and 38 tests. Suite: 146 pass, 0
+fail. Verified twice against the real 563-item vault, not only fixtures —
+which is where three defects surfaced that fixtures never would have:
+
+1. **Substring keyword matching is too loose.** "Readwise" matched the
+   finance hint "wise" and ranked as money. Fixed: hints match from a word
+   boundary (so "hargreaveslansdown.com" still hits), and the short
+   ambiguous ones (isa, ira, irs, tax, wise, visa, loan) must match whole
+   words. Real-vault rank-1 count went 48 → 40.
+2. **Non-accounts could outrank accounts.** A secure note called "Trader-7
+   Coinbase API" scored a finance hit and sorted above real accounts while
+   being hidden by default. Fixed: accounts occupy ranks 0-3, non-accounts
+   4-5 — so the "show everything" toggle appends to the list instead of
+   reshuffling it.
+3. **Title clashes are common, not rare: 178 of 563 items share a title**
+   with another item (the same messy vault behind T-284). They would share
+   a pointer, so re-import would hide the twin. Mapper now emits
+   `title_collisions`; P2's wizard must act on it (§5).
+
+Also confirmed live: the not-signed-in and approval-timeout paths are real
+and exit cleanly (the vault session expired mid-session and the wrapper
+said so in plain English, printing nothing on stdout). Real-vault shape:
+563 items → 540 shown by default, 23 hidden, 7 at rank 0, 40 at rank 1,
+493 generic. That 493 is the tail the wizard's filter box (§9.6) exists
+for, and the strongest argument for P2 taking ergonomics seriously.
+
+Deviations from the spec as written, both deliberate and both above:
+`access_pointer` carries the pointer instead of `identifier` (§4), and the
+grep guard shipped in P1 instead of P4 (§7).

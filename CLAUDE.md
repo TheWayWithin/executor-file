@@ -39,15 +39,26 @@ All specs live in `ideation/` (moved from repo root, 17 Jul 2026):
 - **EF-ISS-8 (open, project): 1Password import.** Spec committed at
   `ideation/1password-import-spec.md` — metadata-only `op` CLI pull, wizard
   + bulk triage in the browser editor, dedup for review-time re-import.
-  **P0 spike DONE 29 Jul** against the real vault (findings in spec §9:
-  list output is clean of secrets; drop `additional_information`; 94% of a
-  real vault is generic Login so ranking needs the finance heuristic).
-  Owner machine ready: op 2.35.0 + 1Password 8 CLI integration on.
-- **Pickup sequence (agreed 29 Jul 2026):**
-  1. Build EF-ISS-8 **P1** — `scripts/import-1password.sh` (pull + mapper,
-     candidate JSON, stub-`op` CI tests; spec §6-7).
-  2. **P2** — editor integration: /import endpoint, vault picker, wizard
-     with filter box + bulk mode, seal-time honesty gate.
+  **P0 spike DONE 29 Jul** against the real vault (spec §9: list output is
+  clean of secrets; drop `additional_information`; 94% of a real vault is
+  generic Login so ranking needs the finance heuristic).
+  **P1 BUILT 29 Jul** (spec §11): `scripts/import-1password.sh` (pull,
+  in-memory, exit codes 3/4/5/6 for op-absent / no-account / refused /
+  no-python) + `scripts/map-1password.py` (pure mapper → candidate JSON),
+  `tests/stub-op/op` + fixtures, 38 tests, suite 146 pass / 0 fail, plus
+  the metadata-only grep guard. Verified twice against the real 563-item
+  vault. Spec corrections made in P1: the `1Password > {title}` pointer
+  lives in **`access_pointer`** (not `identifier`), priority uses the
+  schema's `normal`, and `title_collisions` flags the 178-of-563 items
+  that share a title with another item.
+- **Pickup sequence (agreed 29 Jul 2026, P1 now done):**
+  1. ~~EF-ISS-8 **P1** — pull + mapper + stub-`op` tests.~~ DONE 29 Jul.
+  2. **P2 (next)** — editor integration: `GET /import/1password` in
+     edit-server.py, vault picker, wizard with filter box + bulk mode,
+     seal-time honesty gate. Must handle `title_collisions` (ask for a
+     last-4 in `identifier`) and default the wizard to `default_include`
+     with a "show everything" toggle. The importer needs no re-pull for
+     the toggle — hidden candidates are already in the payload.
   3. **T-159 Session A** — Jamie builds his REAL register, using the
      import wizard as its first genuine UAT (dogfood on 563 items).
   4. **Session B** (docs/UAT-PLAN.md) — seal + print, PLUS the 1Password

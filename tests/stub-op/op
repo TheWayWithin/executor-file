@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# stub `op` — stands in for the 1Password CLI so the importer can be tested
+# without a vault, a network, or a human approving a prompt.
+#
+# Put this directory first on PATH. It answers exactly the two read-only
+# calls scripts/import-1password.sh makes, from tests/fixtures/, and can be
+# told to fail the way the real tool fails:
+#
+#   OP_STUB_FAIL=noaccount   no 1Password account available   (importer: 4)
+#   OP_STUB_FAIL=denied      every call refused               (importer: 5)
+#   OP_STUB_FAIL=itemfail    vaults fine, the item pull fails (importer: 5)
+set -u
+
+FIX="${OP_STUB_FIXTURES:-$(cd "$(dirname "$0")/../fixtures" && pwd)}"
+
+case "${OP_STUB_FAIL:-}" in
+  noaccount)
+    echo '[ERROR] 2026/07/29 19:28:03 found no accounts for filter ""' >&2
+    exit 1 ;;
+  denied)
+    echo '[ERROR] 2026/07/29 19:28:03 authorization prompt dismissed by the user' >&2
+    exit 1 ;;
+esac
+
+case "${1:-} ${2:-}" in
+  "vault list")
+    cat "$FIX/op-vaults.json" ;;
+  "item list")
+    if [ "${OP_STUB_FAIL:-}" = itemfail ]; then
+      echo '[ERROR] 2026/07/29 19:28:03 could not read items' >&2
+      exit 1
+    fi
+    cat "$FIX/op-items.json" ;;
+  "--version "*)
+    echo "2.35.0" ;;
+  *)
+    echo "stub op: unsupported call: $*" >&2
+    exit 1 ;;
+esac

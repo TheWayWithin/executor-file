@@ -449,6 +449,166 @@ else
   skip "ceremony test needs expect"
 fi
 
+echo "== 1Password import: mapper (EF-ISS-8 P1) =="
+if command -v python3 >/dev/null 2>&1; then
+  IMP="$T/import"; mkdir -p "$IMP"
+  FIX="$ROOT/tests/fixtures"
+  VJ="$(cat "$FIX/op-vaults.json")"
+  jq_get() { python3 -c "import json,sys; print($1)" < "$2"; }
+
+  python3 "$ROOT/scripts/map-1password.py" --today 2026-07-29 \
+    --vaults-json "$VJ" "$FIX/op-items.json" > "$IMP/plain.json" 2>"$IMP/plain.err"
+  check "mapper runs on the fixture vault" 0 $?
+  python3 -c "import json;json.load(open('$IMP/plain.json'))" 2>/dev/null \
+    && ok "mapper emits valid JSON" || fail "mapper output is not valid JSON"
+
+  # The security boundary, asserted on the actual output.
+  grep -q "additional_information" "$IMP/plain.json" \
+    && fail "additional_information leaked into the candidate JSON" \
+    || ok "additional_information dropped at the mapping stage"
+  grep -q "jamie@example.com" "$IMP/plain.json" \
+    && fail "username/email hint leaked into the candidate JSON" \
+    || ok "username/email hints never reach the candidates"
+
+  # Money first (spec §3, §9.5): a credit card outranks a generic login,
+  # and a bank-looking login outranks a marketing tool.
+  [ "$(jq_get "json.load(sys.stdin)['candidates'][0]['title']" "$IMP/plain.json")" = "Amex Platinum" ] \
+    && ok "credit card is triaged first" || fail "credit card is not first"
+  ORDER="$(jq_get "' '.join(c['title'] for c in json.load(sys.stdin)['candidates'])" "$IMP/plain.json")"
+  case "$ORDER" in
+    *"HSBC UK"*"Mailchimp"*) ok "finance heuristic ranks a bank above a generic login" ;;
+    *) fail "finance heuristic did not rank the bank first: $ORDER" ;;
+  esac
+
+  # URL handling: host only, never a path, query string, port or www.
+  HOSTS="$(jq_get "' '.join(c['url_host'] for c in json.load(sys.stdin)['candidates'])" "$IMP/plain.json")"
+  case "$HOSTS" in
+    *hsbc.co.uk*vanguardinvestor.co.uk*) ok "URLs reduced to clean hosts" ;;
+    *) fail "url_host wrong: $HOSTS" ;;
+  esac
+  case "$HOSTS" in
+    *session=*|*:443*|*www.*|*/*) fail "url_host kept a query, port, www or path: $HOSTS" ;;
+    *) ok "no query strings, ports, www or paths survive" ;;
+  esac
+
+  # Category mapping and the non-account toggle.
+  MAPPED="$(jq_get "json.dumps({c['title']: [c['suggested']['type'], c['suggested']['preferred_action'], c['default_include']] for c in json.load(sys.stdin)['candidates']})" "$IMP/plain.json")"
+  case "$MAPPED" in
+    *'"Peloton Membership": ["subscription", "cancel", true]'*) ok "membership maps to subscription/cancel" ;;
+    *) fail "membership mapping wrong" ;;
+  esac
+  case "$MAPPED" in
+    *'"Fastmail": ["other", "preserve", true]'*) ok "email account maps to preserve (the recovery hub)" ;;
+    *) fail "email account mapping wrong" ;;
+  esac
+  case "$MAPPED" in
+    *'"Home wifi": ["other", "notify-only", false]'*) ok "secure notes are emitted but off by default" ;;
+    *) fail "non-account category not marked default_include false" ;;
+  esac
+
+  # Ranking regressions found on a real 563-item vault.
+  RANKS="$(jq_get "json.dumps({c['title']: c['rank'] for c in json.load(sys.stdin)['candidates']})" "$IMP/plain.json")"
+  case "$RANKS" in
+    *'"Readwise": 3'*) ok "'Readwise' does not read as a finance hit ('wise')" ;;
+    *) fail "short-keyword false positive is back: $RANKS" ;;
+  esac
+  case "$RANKS" in
+    *'"Coinbase API notes": 4'*) ok "a finance-looking secure note still sorts after every account" ;;
+    *) fail "non-account ranking wrong: $RANKS" ;;
+  esac
+  jq_get "json.dumps(sorted({c['title'] for c in json.load(sys.stdin)['candidates'] if c.get('title_collisions')}))" "$IMP/plain.json" \
+    | grep -q '\["Amex Platinum"\]' \
+    && ok "two vault items with one title are flagged as a clash" || fail "title clash not flagged"
+
+  # Titles with quotes and accents must survive verbatim.
+  jq_get "json.dumps([c['suggested']['access_pointer'] for c in json.load(sys.stdin)['candidates']], ensure_ascii=False)" "$IMP/plain.json" \
+    | grep -q 'Café \\"Nero\\" & Co' \
+    && ok "quoted/accented titles survive the pointer" || fail "title escaping mangled a pointer"
+
+  # Dedup (spec §5): exact pointer match drops, provider near-miss warns.
+  python3 "$ROOT/scripts/map-1password.py" --today 2026-07-29 --vault Personal \
+    --existing "$FIX/existing-register.json" --vaults-json "$VJ" \
+    "$FIX/op-items.json" > "$IMP/dedup.json" 2>"$IMP/dedup.err"
+  check "mapper runs with an existing register + vault filter" 0 $?
+  DED="$(jq_get "json.dumps(json.load(sys.stdin)['counts'])" "$IMP/dedup.json")"
+  case "$DED" in
+    *'"deduped": 1'*) ok "an already-listed item is deduped out" ;;
+    *) fail "dedup count wrong: $DED" ;;
+  esac
+  case "$DED" in
+    *'"other_vaults": 1'*) ok "the vault filter excludes other vaults" ;;
+    *) fail "vault filter wrong: $DED" ;;
+  esac
+  jq_get "' '.join(c['title'] for c in json.load(sys.stdin)['candidates'])" "$IMP/dedup.json" \
+    | grep -q "HSBC" && fail "deduped item still offered" || ok "the deduped item is gone from the list"
+  jq_get "json.dumps([[c['title'], c.get('possible_duplicate_of')] for c in json.load(sys.stdin)['candidates'] if c.get('possible_duplicate_of')])" "$IMP/dedup.json" \
+    | grep -q '\["Netflix", "A009"\]' \
+    && ok "a same-provider near-miss is flagged, not duplicated" || fail "near-miss not flagged"
+
+  # The payoff test: accepted candidates are validator-clean entries.
+  python3 "$ROOT/tests/candidates-to-register.py" "$IMP/plain.json" > "$IMP/imported.yaml" 2>"$IMP/conv.err"
+  check "candidates convert into a register" 0 $?
+  sh "$ROOT/scripts/validate.sh" "$IMP/imported.yaml" > "$IMP/val.log" 2>&1
+  check "an all-imported register passes the baseline validator" 0 $?
+  grep -q "0 warning" "$IMP/val.log" && ok "imported entries raise no warnings" || fail "imported entries raised warnings"
+  if [ "$HAVE_STRICT" -eq 1 ]; then
+    "$PYTHON" "$ROOT/scripts/validate.py" "$IMP/imported.yaml" > "$IMP/val-strict.log" 2>&1
+    check "an all-imported register passes the strict validator" 0 $?
+  else
+    skip "strict-tier check on imported entries needs PyYAML"
+  fi
+
+  echo "== 1Password import: the pull wrapper, driven by a stub op =="
+  STUB="$ROOT/tests/stub-op"
+  PATH="$STUB:$PATH" "$ROOT/scripts/import-1password.sh" --today 2026-07-29 \
+    > "$IMP/wrap.json" 2>"$IMP/wrap.err"
+  check "import-1password.sh completes against the stub" 0 $?
+  cmp -s "$IMP/wrap.json" "$IMP/plain.json" \
+    && ok "wrapper output matches the mapper exactly" || fail "wrapper and mapper disagree"
+
+  PATH="$STUB:$PATH" "$ROOT/scripts/import-1password.sh" --vaults-only --today 2026-07-29 \
+    > "$IMP/vaults.json" 2>&1
+  check "--vaults-only succeeds (the editor's picker)" 0 $?
+  VONLY="$(jq_get "json.dumps([[v['name'] for v in json.load(sys.stdin)['vaults']], len(json.load(open('$IMP/vaults.json'))['candidates'])])" "$IMP/vaults.json")"
+  [ "$VONLY" = '[["Personal", "Work"], 0]' ] \
+    && ok "--vaults-only lists vaults and pulls no items" || fail "--vaults-only wrong: $VONLY"
+
+  env PATH=/usr/bin:/bin "$ROOT/scripts/import-1password.sh" > "$IMP/noop.log" 2>&1
+  check "no op installed fails with its own exit code" 3 $?
+  grep -q "brew install 1password-cli" "$IMP/noop.log" \
+    && ok "the missing-op message says how to install it" || fail "install hint missing"
+
+  PATH="$STUB:$PATH" OP_STUB_FAIL=noaccount "$ROOT/scripts/import-1password.sh" > "$IMP/noacct.log" 2>&1
+  check "no signed-in account fails with its own exit code" 4 $?
+  grep -q "Integrate with 1Password CLI" "$IMP/noacct.log" \
+    && ok "the no-account message names the app setting" || fail "app-integration hint missing"
+
+  PATH="$STUB:$PATH" OP_STUB_FAIL=denied "$ROOT/scripts/import-1password.sh" > "$IMP/denied.log" 2>&1
+  check "a refused approval fails with its own exit code" 5 $?
+
+  PATH="$STUB:$PATH" OP_STUB_FAIL=itemfail "$ROOT/scripts/import-1password.sh" \
+    > "$IMP/itemfail.out" 2>"$IMP/itemfail.err"
+  check "a failed item pull fails with its own exit code" 5 $?
+  [ ! -s "$IMP/itemfail.out" ] \
+    && ok "a failed pull prints no partial candidate list" || fail "partial candidates written on failure"
+else
+  skip "1Password import tests need python3"
+fi
+
+echo "== 1Password import: the metadata-only boundary (grep guard) =="
+boundary() { # $1=pattern $2=label — the pattern must appear nowhere in the
+             # shipped code or docs (ideation/ is the spec, tests/ is this file)
+  if git -C "$ROOT" grep -F -il -e "$1" -- ':!ideation' ':!tests' >/dev/null 2>&1; then
+    fail "$2 appears in: $(git -C "$ROOT" grep -F -il -e "$1" -- ':!ideation' ':!tests' | tr '\n' ' ')"
+  else
+    ok "$2 appears nowhere"
+  fi
+}
+boundary "--reveal"    "the unmask flag"
+boundary "op item get" "a per-item fetch"
+boundary "op read"     "a secret-reference read"
+boundary "--fields"    "a field selector"
+
 echo "== corrected claims stay gone (grep sweep) =="
 sweep() { # $1=pattern $2=label
   if git -C "$ROOT" grep -il -e "$1" -- ':!ideation' ':!tests' >/dev/null 2>&1; then
