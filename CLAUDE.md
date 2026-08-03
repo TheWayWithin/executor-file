@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # CLAUDE.md — Executor File
 
 Context for Claude Code sessions in this repo.
